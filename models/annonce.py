@@ -1,3 +1,4 @@
+# models/annonce.py
 from pydantic import BaseModel
 from typing import List, Dict
 
@@ -13,7 +14,6 @@ class AnnonceOutput(BaseModel):
     location: Dict[str, float | str]
 
     class Config:
-        fields = {
-            "L_essentiel": "L'essentiel",
-            "Bilan_energetique": "Bilan énergétique"
+        json_encoders = {  # Remplace fields par une configuration valide
+            float: lambda v: str(v) if v is not None else None
         }
