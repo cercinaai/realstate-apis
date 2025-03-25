@@ -35,22 +35,22 @@ jobs:
           host: ${{ secrets.SERVER_IP }}
           username: ubuntu
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.SSH_PORT }}  # Ajout du port personnalisé
+          port: ${{ secrets.SSH_PORT }}
           script: |
-            # Arrêter et supprimer le conteneur existant s'il existe
-            docker stop realstate-api || true
-            docker rm realstate-api || true
-            
-            # Supprimer les images obsolètes (optionnel)
-            docker image prune -f
-            
+            # Vérifier si le conteneur realstate-api existe avant de l'arrêter
+            if [ "$(docker ps -q -f name=realstate-api)" ]; then
+              docker stop realstate-api
+              docker rm realstate-api
+            fi
+
             # Télécharger la nouvelle image
             docker pull ${{ secrets.DOCKER_USERNAME }}/realstate-api:latest
-            
+
             # Lancer le conteneur avec le fichier .env
             docker run -d \
               --name realstate-api \
               -p 5009:5009 \
               --env-file /home/ubuntu/realstate-api/.env \
+              --restart unless-stopped \
               ${{ secrets.DOCKER_USERNAME }}/realstate-api:latest
             echo "Deployed successfully"
