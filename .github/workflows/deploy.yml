@@ -53,3 +53,4 @@ jobs:
               -p 5009:5009 \
               --env-file /home/ubuntu/realstate-api/.env \
               ${{ secrets.DOCKER_USERNAME }}/realstate-api:latest
+            echo "Deployed successfully"
