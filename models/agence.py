@@ -14,6 +14,14 @@ class AgenceModel(BaseModel):
     number: Optional[str] = None
     description: Optional[str] = None
     scraped_at: Optional[str] = None
+    email: Optional[str] = None
+
+    class Config:
+        extra = "ignore"
+
+class AgencyUpdate(BaseModel):
+    email: Optional[str] = None
+    number: Optional[str] = None
 
     class Config:
         extra = "ignore"
