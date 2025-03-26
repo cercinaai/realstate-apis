@@ -5,15 +5,13 @@ from api.apis import api_router
 from database import db
 from loguru import logger
 from contextlib import asynccontextmanager
-from database import init_db, close_db 
+
 # Gestionnaire de lifespan
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await init_db()  # <-- Manquait cet appel
-    logger.info("✅ Application démarrée. Connexion à MongoDB établie.")
+    logger.info("Application démarrée. Connexion à MongoDB établie.")
     yield
-    await close_db()
-    logger.info("🛑 Application arrêtée. Connexion à MongoDB fermée.")
+    logger.info("Application arrêtée. Connexion à MongoDB fermée.")
 
 # Initialiser FastAPI avec lifespan
 app = FastAPI(
