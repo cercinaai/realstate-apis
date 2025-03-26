@@ -1,12 +1,13 @@
+# api/apis.py
 from fastapi import APIRouter, HTTPException
 from bson import ObjectId
 from typing import Optional, List, Dict
 from loguru import logger
 from models.annonce import AnnonceOutput
 from models.agenc import AgenceOutput
-from database import db  # Importer db depuis database.py
+from database import get_db  # Importer get_db
 import math
-from pydantic import BaseModel  # Ajouté pour AgencyUpdate
+from pydantic import BaseModel
 
 api_router = APIRouter()
 
@@ -65,7 +66,7 @@ def format_agence(agence: Dict) -> Dict:
         "opening_hours": agence.get("horaires", None),
         "phone_number": agence.get("number", None),
         "description": agence.get("description", None),
-        "email": agence.get("email", None)  # Modifié pour inclure email
+        "email": agence.get("email", None)
     }
 
 # API pour toutes les annonces avec pagination
@@ -74,14 +75,16 @@ async def get_all_annonces(page: int = 1):
     try:
         per_page = 8
         skip = (page - 1) * per_page
+        db = get_db()
         collection = db["realStateFinale"]
-        total_annonces = collection.count_documents({})
+        total_annonces = await collection.count_documents({})
         total_pages = math.ceil(total_annonces / per_page)
 
-        annonces = list(collection.find({})
-                       .sort("processed_at", -1)
-                       .skip(skip)
-                       .limit(per_page))
+        annonces = await collection.find({}) \
+            .sort("processed_at", -1) \
+            .skip(skip) \
+            .limit(per_page) \
+            .to_list(length=per_page)
 
         formatted_annonces = [format_annonce(annonce) for annonce in annonces]
 
@@ -112,6 +115,7 @@ async def get_filtered_annonces(
         per_page = 8
         skip = (page - 1) * per_page
         query = {}
+        db = get_db()
         collection = db["realStateFinale"]
 
         if location_type and location_type not in ["region", "departement", "city"]:
@@ -133,13 +137,14 @@ async def get_filtered_annonces(
         if max_price:
             query["price"] = {"$lte": max_price}
 
-        total_annonces = collection.count_documents(query)
+        total_annonces = await collection.count_documents(query)
         total_pages = math.ceil(total_annonces / per_page)
 
-        annonces = list(collection.find(query)
-                       .sort("processed_at", -1)
-                       .skip(skip)
-                       .limit(per_page))
+        annonces = await collection.find(query) \
+            .sort("processed_at", -1) \
+            .skip(skip) \
+            .limit(per_page) \
+            .to_list(length=per_page)
 
         formatted_annonces = [format_annonce(annonce) for annonce in annonces]
 
@@ -159,8 +164,9 @@ async def get_filtered_annonces(
 @api_router.get("/realstate/detail/{annonce_id}", response_model=Dict)
 async def get_annonce_detail(annonce_id: str):
     try:
+        db = get_db()
         collection = db["realStateFinale"]
-        annonce = collection.find_one({"_id": ObjectId(annonce_id)})
+        annonce = await collection.find_one({"_id": ObjectId(annonce_id)})
         if not annonce:
             raise HTTPException(status_code=404, detail="Annonce non trouvée")
 
@@ -178,7 +184,7 @@ async def get_annonce_detail(annonce_id: str):
             "price": {"$gte": price - 200, "$lte": price + 200},
             "_id": {"$ne": ObjectId(annonce_id)}
         }
-        similar_annonces = list(collection.find(similar_query).limit(5))
+        similar_annonces = await collection.find(similar_query).limit(5).to_list(length=5)
         formatted_similar = [format_annonce(a) for a in similar_annonces]
 
         response = {
@@ -197,14 +203,16 @@ async def get_all_agences(page: int = 1):
     try:
         per_page = 8
         skip = (page - 1) * per_page
+        db = get_db()
         collection = db["agencesFinale"]
-        total_agences = collection.count_documents({})
+        total_agences = await collection.count_documents({})
         total_pages = math.ceil(total_agences / per_page)
 
-        agences = list(collection.find({})
-                      .sort("_id", -1)
-                      .skip(skip)
-                      .limit(per_page))
+        agences = await collection.find({}) \
+            .sort("_id", -1) \
+            .skip(skip) \
+            .limit(per_page) \
+            .to_list(length=per_page)
 
         formatted_agences = [format_agence(agence) for agence in agences]
 
@@ -224,8 +232,9 @@ async def get_all_agences(page: int = 1):
 @api_router.get("/agence/detail/{agence_id}", response_model=Dict)
 async def get_agence_detail(agence_id: str):
     try:
+        db = get_db()
         collection = db["agencesFinale"]
-        agence = collection.find_one({"_id": ObjectId(agence_id)})
+        agence = await collection.find_one({"_id": ObjectId(agence_id)})
         if not agence:
             raise HTTPException(status_code=404, detail="Agence non trouvée")
 
@@ -233,7 +242,7 @@ async def get_agence_detail(agence_id: str):
 
         # Récupérer les annonces associées à cette agence
         annonce_collection = db["realStateFinale"]
-        agence_annonces = list(annonce_collection.find({"idAgence": str(agence["_id"])}))
+        agence_annonces = await annonce_collection.find({"idAgence": str(agence["_id"])}).to_list(length=None)
         formatted_annonces = [format_annonce(a) for a in agence_annonces]
 
         response = {
@@ -251,18 +260,19 @@ async def get_agence_detail(agence_id: str):
 async def get_agencies(page: int = 1, limit: int = 10):
     try:
         skip = (page - 1) * limit
-        collection = db["agencesFinale"]  # Utilisation de agencesFinale
-        total_agencies = collection.count_documents({})
+        db = get_db()
+        collection = db["agencesFinale"]
+        total_agencies = await collection.count_documents({})
         total_pages = math.ceil(total_agencies / limit)
 
-        agencies = list(collection.find().skip(skip).limit(limit))
+        agencies = await collection.find().skip(skip).limit(limit).to_list(length=limit)
         response_agencies = [
             {
-                "id": str(agency["_id"]),  # Convertir ObjectId en str pour la réponse
+                "id": str(agency["_id"]),
                 "name": agency.get("name", ""),
                 "email": agency.get("email", ""),
                 "number": agency.get("number", ""),
-                "lien": agency.get("siteWeb", "")  # Adaptation à ton modèle
+                "lien": agency.get("siteWeb", "")
             }
             for agency in agencies
         ]
@@ -282,15 +292,15 @@ async def get_agencies(page: int = 1, limit: int = 10):
 @api_router.put("/api/v1/agencies/{agency_id}", response_model=Dict)
 async def update_agency(agency_id: str, update: AgencyUpdate):
     try:
-        # Convertir la chaîne agency_id en ObjectId
         agency_object_id = ObjectId(agency_id)
         update_data = {k: v for k, v in update.dict().items() if v is not None}
         if not update_data:
             raise HTTPException(status_code=400, detail="Aucune donnée à mettre à jour")
 
-        collection = db["agencesFinale"]  # Utilisation de agencesFinale
-        result = collection.update_one(
-            {"_id": agency_object_id},  # Utiliser ObjectId ici
+        db = get_db()
+        collection = db["agencesFinale"]
+        result = await collection.update_one(
+            {"_id": agency_object_id},
             {"$set": update_data}
         )
         if result.matched_count == 0:
@@ -299,7 +309,6 @@ async def update_agency(agency_id: str, update: AgencyUpdate):
         logger.info(f"✅ Agence {agency_id} mise à jour avec succès")
         return {"message": "Mise à jour réussie"}
     except ValueError as e:
-        # Si agency_id n'est pas un ObjectId valide
         logger.error(f"⚠️ ID invalide pour l'agence {agency_id} : {e}")
         raise HTTPException(status_code=400, detail=f"ID invalide : {str(e)}")
     except Exception as e:
