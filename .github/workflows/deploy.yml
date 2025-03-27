@@ -87,7 +87,7 @@ jobs:
             docker pull ${{ secrets.DOCKER_USERNAME }}/realstate-frontend:latest
             docker run -d \
               --name realstate-frontend \
-              -p 80:80 \
+              -p 8080:80 \
               --network xtracto-network \
               --restart unless-stopped \
               ${{ secrets.DOCKER_USERNAME }}/realstate-frontend:latest
