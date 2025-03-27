@@ -23,7 +23,8 @@ jobs:
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
-        with:
+        with 
+   
           context: .
           file: ./Dockerfile
           push: true
@@ -37,6 +38,9 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT }}
           script: |
+            # Créer un réseau Docker s'il n'existe pas
+            docker network create xtracto-network || true
+
             # Vérifier si le conteneur realstate-api existe avant de l'arrêter
             if [ "$(docker ps -q -f name=realstate-api)" ]; then
               docker stop realstate-api
@@ -46,11 +50,16 @@ jobs:
             # Télécharger la nouvelle image
             docker pull ${{ secrets.DOCKER_USERNAME }}/realstate-api:latest
 
-            # Lancer le conteneur avec le fichier .env
+            # Lancer le conteneur avec le fichier .env et le réseau
             docker run -d \
               --name realstate-api \
               -p 5009:5009 \
               --env-file /home/ubuntu/realstate-api/.env \
+              --network xtracto-network \
               --restart unless-stopped \
               ${{ secrets.DOCKER_USERNAME }}/realstate-api:latest
+
+            # Connecter le conteneur mongodb existant au réseau
+            docker network connect xtracto-network mongodb || true
+
             echo "Deployed successfully"
