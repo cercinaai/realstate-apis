@@ -19,8 +19,8 @@
     <ng-container matColumnDef="email">
       <th mat-header-cell *matHeaderCellDef>Email</th>
       <td mat-cell *matCellDef="let agence">
-        <div *ngFor="let email of agence.emails; let i = index">
-          <input [(ngModel)]="agence.emails[i]" placeholder="Email">
+        <div *ngFor="let email of agence.emails; let i = index; trackBy: trackByIndex">
+          <input [(ngModel)]="agence.emails[i]" placeholder="Email" [name]="'email-' + i">
         </div>
         <button class="add-btn" (click)="addEmail(agence)">+ Ajouter email</button>
       </td>

@@ -1,8 +1,9 @@
 import { Component, OnInit } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
+import { Router } from '@angular/router';
 import { AgenceService } from '../agence.service';
 import { AgencyUpdateDialogComponent } from './agency-update-dialog/agency-update-dialog.component';
-import { Router } from '@angular/router';
+
 @Component({
   selector: 'app-agences',
   templateUrl: './agences.component.html',
@@ -17,7 +18,11 @@ export class AgencesComponent implements OnInit {
   totalPages = 0;
   limitOptions = [10, 20, 50];
 
-  constructor(private agenceService: AgenceService, public dialog: MatDialog,private router: Router) {}
+  constructor(
+    private agenceService: AgenceService,
+    public dialog: MatDialog,
+    private router: Router
+  ) {}
 
   ngOnInit() {
     this.loadAgences();
@@ -57,7 +62,7 @@ export class AgencesComponent implements OnInit {
     const update = { email: agence.emails.join(','), number: agence.number };
     this.agenceService.updateAgence(agence.id, update).subscribe(() => {
       alert('Agence mise à jour');
-      this.loadAgences(); // Recharge pour refléter les changements
+      this.loadAgences();
     });
   }
 
@@ -74,12 +79,16 @@ export class AgencesComponent implements OnInit {
 
   changeLimit(newLimit: number) {
     this.limit = newLimit;
-    this.page = 1; // Réinitialise à la première page
+    this.page = 1;
     this.loadAgences();
   }
 
   logout() {
-    localStorage.removeItem('token'); // Supprime le token
-    this.router.navigate(['/xtracto/signin']); // Redirige vers la page de login
+    localStorage.removeItem('token');
+    this.router.navigate(['/xtracto/signin']);
+  }
+
+  trackByIndex(index: number, item: any): number {
+    return index; // Retourne l'index comme identifiant unique
   }
 }

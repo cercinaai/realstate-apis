@@ -342,7 +342,7 @@ async def get_agencies(page: int = 1, limit: int = 10, current_user: str = Depen
                 "name": agency.get("name", ""),
                 "email": agency.get("email", ""),
                 "number": agency.get("number", ""),
-                "lien": agency.get("siteWeb", "")
+                "lien": agency.get("lien", "")
             }
             for agency in agencies
         ]
