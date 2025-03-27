@@ -13,7 +13,7 @@ export class AgenceService {
   }
 
   getAgences(page: number, limit: number): Observable<any> {
-    return this.http.get(`${environment.apiUrl}/agence/all?page=${page}&limit=${limit}`, { headers: this.getHeaders() });
+    return this.http.get(`${environment.apiUrl}/agencies/all?page=${page}&limit=${limit}`, { headers: this.getHeaders() });
   }
 
   updateAgence(id: string, update: any): Observable<any> {

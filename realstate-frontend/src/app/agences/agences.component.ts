@@ -21,11 +21,22 @@ export class AgencesComponent implements OnInit {
   }
 
   loadAgences() {
-    this.agenceService.getAgences(this.page, this.limit).subscribe((data) => {
-      this.agences = data.agencies.map(agence => ({
-        ...agence,
-        emails: agence.email ? agence.email.split(',') : []
-      }));
+    this.agenceService.getAgences(this.page, this.limit).subscribe({
+      next: (data) => {
+        if (data && data.agencies) {
+          this.agences = data.agencies.map(agence => ({
+            ...agence,
+            emails: agence.email ? agence.email.split(',') : []
+          }));
+        } else {
+          console.error('Aucune donnée ou agences trouvées:', data);
+          this.agences = [];
+        }
+      },
+      error: (err) => {
+        console.error('Erreur lors du chargement des agences:', err);
+        this.agences = [];
+      }
     });
   }
 

@@ -1,5 +1,6 @@
 # api/apis.py
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi.security import OAuth2PasswordBearer
 from bson import ObjectId
 from typing import Optional, List, Dict
 from loguru import logger
@@ -21,21 +22,25 @@ class AgencyUpdate(BaseModel):
     email: Optional[str] = None
     number: Optional[str] = None
 
-# Clé secrète pour JWT (à sécuriser dans une variable d'environnement en production)
+# Clé secrète pour JWT
 SECRET_KEY = "cercina-F7zR1aXq3N9vL8Pw"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
-# Utilisateur par défaut (simulé, en production utilise une collection MongoDB)
+# Utilisateur par défaut
 DEFAULT_USER = {
     "username": "realEstateAdmin",
     "password": bcrypt.hashpw("realEstateData15963".encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 }
-# Fonction pour vérifier le mot de passe
+
+# OAuth2 pour valider le token
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+
+# Vérification du mot de passe
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
 
-# Fonction pour créer un token JWT
+# Création d’un token JWT
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
     if expires_delta:
@@ -46,16 +51,31 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
+# Vérification du token
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Token invalide ou expiré",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username != DEFAULT_USER["username"]:
+            raise credentials_exception
+        return username
+    except jwt.PyJWTError:
+        raise credentials_exception
+    
+    
 # API de login
 @api_router.post("/auth/login", response_model=Dict)
 async def login(request: LoginRequest):
     try:
         if request.username != DEFAULT_USER["username"]:
             raise HTTPException(status_code=401, detail="Nom d'utilisateur incorrect")
-        
         if not verify_password(request.password, DEFAULT_USER["password"]):
             raise HTTPException(status_code=401, detail="Mot de passe incorrect")
-
         access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token = create_access_token(
             data={"sub": request.username}, expires_delta=access_token_expires
@@ -305,9 +325,9 @@ async def get_agence_detail(agence_id: str):
         logger.error(f"⚠️ Erreur lors de la récupération de l'agence {agence_id} : {e}")
         raise HTTPException(status_code=500, detail="Erreur serveur")
 
-# Nouvelle API pour récupérer toutes les agences avec pagination (version /api/v1/agencies/all)
+# API pour toutes les agences avec pagination et authentification
 @api_router.get("/agencies/all", response_model=Dict)
-async def get_agencies(page: int = 1, limit: int = 10):
+async def get_agencies(page: int = 1, limit: int = 10, current_user: str = Depends(get_current_user)):
     try:
         skip = (page - 1) * limit
         db = get_db()
