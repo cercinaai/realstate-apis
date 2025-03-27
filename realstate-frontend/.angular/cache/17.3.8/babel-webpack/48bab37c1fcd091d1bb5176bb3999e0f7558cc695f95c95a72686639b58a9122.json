@@ -1,0 +1,1 @@
+{"ast":null,"code":"export const environment = {\n  production: false,\n  apiUrl: 'http://141.94.240.141/api/v1',\n  loginUrl: 'http://141.94.240.141/xtracto/signin',\n  agencesUrl: 'http://141.94.240.141/xtracto/agences'\n};","map":null,"metadata":{},"sourceType":"module","externalDependencies":[]}
