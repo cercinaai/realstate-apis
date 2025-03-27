@@ -39,5 +39,8 @@
         }
       }
     },
-    "defaultProject": "realstate-frontend"
+    "defaultProject": "realstate-frontend",
+    "cli": {
+      "analytics": "b3291708-0d14-4738-b8c5-2d9783c6cd54"
+    }
   }
