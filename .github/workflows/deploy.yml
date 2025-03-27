@@ -37,6 +37,24 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT }}
           script: |
+            # Créer un réseau Docker s'il n'existe pas
+            docker network create xtracto-network || true
+
+            # Vérifier si mongodb existe et le connecter au réseau
+            if [ "$(docker ps -q -f name=mongodb)" ]; then
+              echo "Conteneur mongodb en cours d'exécution, connexion au réseau..."
+              docker network connect xtracto-network mongodb || true
+            else
+              echo "Conteneur mongodb non trouvé, démarrage d'une nouvelle instance..."
+              docker run -d \
+                --name mongodb \
+                -p 27017:27017 \
+                -e MONGO_INITDB_ROOT_USERNAME=admin \
+                -e MONGO_INITDB_ROOT_PASSWORD=SuperSecureP@ssw0rd! \
+                --network xtracto-network \
+                mongodb/mongodb-community-server:latest
+            fi
+
             # Vérifier si le conteneur realstate-api existe avant de l'arrêter
             if [ "$(docker ps -q -f name=realstate-api)" ]; then
               docker stop realstate-api
@@ -46,11 +64,13 @@ jobs:
             # Télécharger la nouvelle image
             docker pull ${{ secrets.DOCKER_USERNAME }}/realstate-api:latest
 
-            # Lancer le conteneur avec le fichier .env
+            # Lancer le conteneur avec le fichier .env et le réseau
             docker run -d \
               --name realstate-api \
               -p 5009:5009 \
               --env-file /home/ubuntu/realstate-api/.env \
+              --network xtracto-network \
               --restart unless-stopped \
               ${{ secrets.DOCKER_USERNAME }}/realstate-api:latest
+
             echo "Deployed successfully"
