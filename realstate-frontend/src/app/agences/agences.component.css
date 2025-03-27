@@ -1,8 +1,89 @@
-table {
+.agences-container {
+    max-width: 1200px;
+    margin: 40px auto;
+    padding: 20px;
+    background: linear-gradient(135deg, #f9f9f9, #e9ecef);
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+    animation: fadeIn 0.5s ease-in-out;
+  }
+  
+  .page-title {
+    text-align: center;
+    font-size: 2.5rem;
+    margin-bottom: 30px;
+    font-family: 'Poppins', sans-serif;
+    background: linear-gradient(90deg, #ff6f61, #e65b50);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+  }
+  
+  .header-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    font-family: 'Roboto', sans-serif;
+  }
+  
+  .header-info p {
+    font-size: 1.2rem;
+    color: #2a5298;
+    font-weight: 500;
+  }
+  
+  .limit-selector {
+    display: flex;
+    align-items: center;
+  }
+  
+  .limit-selector label {
+    margin-right: 10px;
+    font-size: 1.1rem;
+    color: #1e3c72;
+  }
+  
+  .limit-selector select {
+    padding: 8px;
+    border-radius: 15px;
+    border: 1px solid #ddd;
+    background: #fff;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+  
+  .limit-selector select:hover {
+    border-color: #ff6f61;
+    box-shadow: 0 0 10px rgba(255, 111, 97, 0.3);
+  }
+  
+  .logout-btn {
+    padding: 10px 20px;
+    background: linear-gradient(90deg, #ff6f61, #e65b50);
+    border: none;
+    border-radius: 20px;
+    color: #fff;
+    font-size: 1.1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+  
+  .logout-btn:hover {
+    background: linear-gradient(90deg, #e65b50, #d9443f);
+    transform: scale(1.05);
+    box-shadow: 0 5px 15px rgba(255, 111, 97, 0.5);
+  }
+  
+  table {
     width: 100%;
     border-collapse: collapse;
     background: #fff;
-    border-radius: 10px;
+    border-radius: 15px;
     overflow: hidden;
     box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
     font-family: 'Roboto', sans-serif;
@@ -11,15 +92,15 @@ table {
   th {
     background: linear-gradient(90deg, #2a5298, #1e3c72);
     color: #fff;
-    padding: 15px;
+    padding: 18px;
     text-align: left;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: 1.5px;
   }
   
   td {
-    padding: 15px;
+    padding: 18px;
     border-bottom: 1px solid #eee;
     vertical-align: middle;
   }
@@ -34,35 +115,95 @@ table {
   }
   
   input {
-    padding: 8px;
+    padding: 10px;
     border: 1px solid #ddd;
     border-radius: 20px;
     width: 100%;
-    margin-bottom: 10px;
-    transition: border 0.3s ease;
+    margin-bottom: 12px;
+    transition: all 0.3s ease;
   }
   
   input:focus {
-    border-color: #2a5298;
+    border-color: #ff6f61;
     outline: none;
+    box-shadow: 0 0 10px rgba(255, 111, 97, 0.3);
   }
   
   button {
-    padding: 8px 15px;
+    padding: 10px 20px;
     border: none;
     border-radius: 20px;
-    background: #ff6f61;
     color: #fff;
     cursor: pointer;
-    margin-right: 10px;
-    transition: transform 0.2s ease, background 0.3s ease;
+    margin-right: 15px;
+    transition: all 0.3s ease;
   }
   
-  button:hover {
+  .add-btn {
+    background: #2a5298;
+  }
+  
+  .add-btn:hover {
+    background: #1e3c72;
+    transform: scale(1.05);
+  }
+  
+  .save-btn {
+    background: #ff6f61;
+  }
+  
+  .save-btn:hover {
     background: #e65b50;
     transform: scale(1.05);
   }
   
-  .mat-elevation-z8 {
-    margin: 20px 0;
+  .details-btn {
+    background: #1e3c72;
+  }
+  
+  .details-btn:hover {
+    background: #2a5298;
+    transform: scale(1.05);
+  }
+  
+  .lien-clickable {
+    color: #ff6f61;
+    text-decoration: none;
+    transition: color 0.3s ease;
+  }
+  
+  .lien-clickable:hover {
+    color: #e65b50;
+    text-decoration: underline;
+  }
+  
+  .pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: 20px;
+    font-family: 'Roboto', sans-serif;
+  }
+  
+  .pagination button {
+    padding: 10px 20px;
+    background: linear-gradient(90deg, #ff6f61, #e65b50);
+    border-radius: 20px;
+  }
+  
+  .pagination button:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+    transform: none;
+  }
+  
+  .pagination span {
+    margin: 0 20px;
+    font-size: 1.1rem;
+    color: #2a5298;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
   }

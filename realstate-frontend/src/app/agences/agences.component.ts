@@ -2,7 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
 import { AgenceService } from '../agence.service';
 import { AgencyUpdateDialogComponent } from './agency-update-dialog/agency-update-dialog.component';
-
+import { Router } from '@angular/router';
 @Component({
   selector: 'app-agences',
   templateUrl: './agences.component.html',
@@ -13,8 +13,11 @@ export class AgencesComponent implements OnInit {
   agences: any[] = [];
   page = 1;
   limit = 10;
+  totalAgences = 0;
+  totalPages = 0;
+  limitOptions = [10, 20, 50];
 
-  constructor(private agenceService: AgenceService, public dialog: MatDialog) {}
+  constructor(private agenceService: AgenceService, public dialog: MatDialog,private router: Router) {}
 
   ngOnInit() {
     this.loadAgences();
@@ -28,14 +31,20 @@ export class AgencesComponent implements OnInit {
             ...agence,
             emails: agence.email ? agence.email.split(',') : []
           }));
+          this.totalAgences = data.total_agencies;
+          this.totalPages = data.total_pages;
         } else {
           console.error('Aucune donnée ou agences trouvées:', data);
           this.agences = [];
+          this.totalAgences = 0;
+          this.totalPages = 0;
         }
       },
       error: (err) => {
         console.error('Erreur lors du chargement des agences:', err);
         this.agences = [];
+        this.totalAgences = 0;
+        this.totalPages = 0;
       }
     });
   }
@@ -46,10 +55,31 @@ export class AgencesComponent implements OnInit {
 
   saveAgence(agence: any) {
     const update = { email: agence.emails.join(','), number: agence.number };
-    this.agenceService.updateAgence(agence.id, update).subscribe(() => alert('Agence mise à jour'));
+    this.agenceService.updateAgence(agence.id, update).subscribe(() => {
+      alert('Agence mise à jour');
+      this.loadAgences(); // Recharge pour refléter les changements
+    });
   }
 
   openDetails(agence: any) {
     this.dialog.open(AgencyUpdateDialogComponent, { data: agence });
+  }
+
+  changePage(newPage: number) {
+    if (newPage >= 1 && newPage <= this.totalPages) {
+      this.page = newPage;
+      this.loadAgences();
+    }
+  }
+
+  changeLimit(newLimit: number) {
+    this.limit = newLimit;
+    this.page = 1; // Réinitialise à la première page
+    this.loadAgences();
+  }
+
+  logout() {
+    localStorage.removeItem('token'); // Supprime le token
+    this.router.navigate(['/xtracto/signin']); // Redirige vers la page de login
   }
 }
