@@ -2,6 +2,9 @@
 FROM node:18 AS build
 WORKDIR /app
 
+# Utiliser l'utilisateur root pour installer les dépendances globales
+USER root
+
 # Copie les fichiers de dépendances
 COPY package*.json ./
 
