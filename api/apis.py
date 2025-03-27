@@ -306,7 +306,7 @@ async def get_agence_detail(agence_id: str):
         raise HTTPException(status_code=500, detail="Erreur serveur")
 
 # Nouvelle API pour récupérer toutes les agences avec pagination (version /api/v1/agencies/all)
-@api_router.get("/api/v1/agencies/all", response_model=Dict)
+@api_router.get("/agencies/all", response_model=Dict)
 async def get_agencies(page: int = 1, limit: int = 10):
     try:
         skip = (page - 1) * limit
@@ -339,7 +339,7 @@ async def get_agencies(page: int = 1, limit: int = 10):
         raise HTTPException(status_code=500, detail=f"Erreur serveur : {str(e)}")
 
 # Nouvelle API pour mettre à jour une agence dans agencesFinale
-@api_router.put("/api/v1/agencies/{agency_id}", response_model=Dict)
+@api_router.put("/agencies/{agency_id}", response_model=Dict)
 async def update_agency(agency_id: str, update: AgencyUpdate):
     try:
         agency_object_id = ObjectId(agency_id)
