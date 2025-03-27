@@ -1,4 +1,4 @@
-name: Deploy RealState API
+name: Deploy RealState API and Frontend
 
 on:
   push:
@@ -21,13 +21,23 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build and push Docker image
+      # Build et push pour realstate-api
+      - name: Build and push RealState API Docker image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/realstate-api:latest
+
+      # Build et push pour realstate-frontend
+      - name: Build and push RealState Frontend Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./realstate-frontend
+          file: ./realstate-frontend/Dockerfile
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/realstate-frontend:latest
 
       - name: Deploy to server
         uses: appleboy/ssh-action@v1.0.3
@@ -55,16 +65,12 @@ jobs:
                 mongodb/mongodb-community-server:latest
             fi
 
-            # Vérifier si le conteneur realstate-api existe avant de l'arrêter
+            # Déployer realstate-api
             if [ "$(docker ps -q -f name=realstate-api)" ]; then
               docker stop realstate-api
               docker rm realstate-api
             fi
-
-            # Télécharger la nouvelle image
             docker pull ${{ secrets.DOCKER_USERNAME }}/realstate-api:latest
-
-            # Lancer le conteneur avec le fichier .env et le réseau
             docker run -d \
               --name realstate-api \
               -p 5009:5009 \
@@ -72,5 +78,18 @@ jobs:
               --network xtracto-network \
               --restart unless-stopped \
               ${{ secrets.DOCKER_USERNAME }}/realstate-api:latest
+
+            # Déployer realstate-frontend
+            if [ "$(docker ps -q -f name=realstate-frontend)" ]; then
+              docker stop realstate-frontend
+              docker rm realstate-frontend
+            fi
+            docker pull ${{ secrets.DOCKER_USERNAME }}/realstate-frontend:latest
+            docker run -d \
+              --name realstate-frontend \
+              -p 80:80 \
+              --network xtracto-network \
+              --restart unless-stopped \
+              ${{ secrets.DOCKER_USERNAME }}/realstate-frontend:latest
 
             echo "Deployed successfully"

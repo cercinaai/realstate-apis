@@ -8,14 +8,64 @@ from models.agenc import AgenceOutput
 from database import get_db  # Importer get_db
 import math
 from pydantic import BaseModel
-
+import bcrypt
+import jwt
+from datetime import datetime, timedelta
 api_router = APIRouter()
-
+# Modèle pour la requête de login
+class LoginRequest(BaseModel):
+    username: str
+    password: str
 # Modèle pour la mise à jour des agences
 class AgencyUpdate(BaseModel):
     email: Optional[str] = None
     number: Optional[str] = None
 
+# Clé secrète pour JWT (à sécuriser dans une variable d'environnement en production)
+SECRET_KEY = "cercina-F7zR1aXq3N9vL8Pw"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+# Utilisateur par défaut (simulé, en production utilise une collection MongoDB)
+DEFAULT_USER = {
+    "username": "realEstateAdmin",
+    "password": bcrypt.hashpw("realEstateData15963".encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+}
+# Fonction pour vérifier le mot de passe
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+
+# Fonction pour créer un token JWT
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=15)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+# API de login
+@api_router.post("/auth/login", response_model=Dict)
+async def login(request: LoginRequest):
+    try:
+        if request.username != DEFAULT_USER["username"]:
+            raise HTTPException(status_code=401, detail="Nom d'utilisateur incorrect")
+        
+        if not verify_password(request.password, DEFAULT_USER["password"]):
+            raise HTTPException(status_code=401, detail="Mot de passe incorrect")
+
+        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"sub": request.username}, expires_delta=access_token_expires
+        )
+        logger.info(f"✅ Connexion réussie pour {request.username}")
+        return {"access_token": access_token, "token_type": "bearer"}
+    except Exception as e:
+        logger.error(f"⚠️ Erreur lors de la connexion : {e}")
+        raise HTTPException(status_code=500, detail="Erreur serveur")
+    
 # Helper pour formater une annonce
 def format_annonce(annonce: Dict) -> Dict:
     return {

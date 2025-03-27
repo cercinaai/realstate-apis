@@ -1,0 +1,6 @@
+# Exclure node_modules
+node_modules/
+
+# Exclure les fichiers générés par Angular
+dist/
+*.log
