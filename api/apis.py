@@ -112,6 +112,7 @@ def format_annonce(annonce: Dict) -> Dict:
             "GES": annonce.get("ges", "")
         },
         "Agence": {
+            "id": annonce.get("idAgence", ""),
             "Nom": annonce.get("agenceName", "")
         },
         "location": {
