@@ -332,77 +332,53 @@ async def get_agencies(page: int = 1, limit: int = 10, current_user: str = Depen
     try:
         skip = (page - 1) * limit
         db = get_db()
-        agences_collection = db["agencesFinale"]
         realstate_collection = db["realStateFinale"]
 
-        # Pipeline d'agrégation
+        # Pipeline principal
         pipeline = [
-            # Étape 1 : Compter les annonces par idAgence
-            {
-                "$group": {
-                    "_id": "$idAgence",
-                    "annonces_count": {"$sum": 1}
-                }
-            },
-            # Étape 2 : Convertir _id en ObjectId si c'est une chaîne
-            {
-                "$addFields": {
-                    "_id": {
-                        "$cond": {
-                            "if": {"$eq": [{"$type": "$_id"}, "string"]},  # Vérifie si _id est une chaîne
-                            "then": {"$toObjectId": "$_id"},              # Convertit en ObjectId
-                            "else": "$_id"                                 # Garde tel quel sinon
-                        }
+            {"$group": {"_id": "$idAgence", "annonces_count": {"$sum": 1}}},
+            {"$addFields": {
+                "_id": {
+                    "$cond": {
+                        "if": {"$eq": [{"$type": "$_id"}, "string"]},
+                        "then": {"$toObjectId": "$_id"},
+                        "else": "$_id"
                     }
                 }
-            },
-            # Étape 3 : Joindre avec agencesFinale
-            {
-                "$lookup": {
-                    "from": "agencesFinale",
-                    "localField": "_id",
-                    "foreignField": "_id",
-                    "as": "agency_info"
-                }
-            },
-            # Étape 4 : Décomposer le tableau agency_info
-            {
-                "$unwind": {
-                    "path": "$agency_info",
-                    "preserveNullAndEmptyArrays": True  # Garder les agences sans correspondance
-                }
-            },
-            # Étape 5 : Projeter les champs nécessaires
-            {
-                "$project": {
-                    "id": "$_id",
-                    "name": {"$ifNull": ["$agency_info.name", ""]},
-                    "email": {"$ifNull": ["$agency_info.email", ""]},
-                    "number": {"$ifNull": ["$agency_info.number", ""]},
-                    "lien": {"$ifNull": ["$agency_info.lien", ""]},
-                    "annonces_count": 1
-                }
-            },
-            # Étape 6 : Trier par nombre d'annonces
-            {
-                "$sort": {"annonces_count": -1}
-            },
-            # Étape 7 : Appliquer la pagination
-            {
-                "$skip": skip
-            },
-            {
-                "$limit": limit
-            }
+            }},
+            {"$lookup": {
+                "from": "agencesFinale",
+                "localField": "_id",
+                "foreignField": "_id",
+                "as": "agency_info"
+            }},
+            {"$unwind": {"path": "$agency_info", "preserveNullAndEmptyArrays": True}},
+            {"$project": {
+                "id": "$_id",
+                "name": {"$ifNull": ["$agency_info.name", ""]},
+                "email": {"$ifNull": ["$agency_info.email", ""]},
+                "number": {"$ifNull": ["$agency_info.number", ""]},
+                "lien": {"$ifNull": ["$agency_info.lien", ""]},
+                "annonces_count": 1
+            }},
+            {"$sort": {"annonces_count": -1}},
+            {"$skip": skip},
+            {"$limit": limit}
         ]
 
-        # Exécuter l'agrégation
         agencies = await realstate_collection.aggregate(pipeline).to_list(length=limit)
         logger.debug(f"Agences récupérées pour page {page} : {len(agencies)} résultats")
 
-        # Compter le nombre total d'agences avec annonces
+        # Pipeline pour total_agencies (seulement agences avec correspondance)
         total_agencies_pipeline = [
             {"$group": {"_id": "$idAgence"}},
+            {"$lookup": {
+                "from": "agencesFinale",
+                "localField": "_id",
+                "foreignField": "_id",
+                "as": "agency_info"
+            }},
+            {"$match": {"agency_info": {"$ne": []}}},
             {"$count": "total"}
         ]
         total_result = await realstate_collection.aggregate(total_agencies_pipeline).to_list(length=1)
@@ -417,7 +393,7 @@ async def get_agencies(page: int = 1, limit: int = 10, current_user: str = Depen
                 "email": agency.get("email", ""),
                 "number": agency.get("number", ""),
                 "lien": agency.get("lien", ""),
-                "annonces_count": agency.get("annonces_count", 0)  # Optionnel
+                "annonces_count": agency.get("annonces_count", 0)
             }
             for agency in agencies
         ]
