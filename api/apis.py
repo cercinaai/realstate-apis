@@ -335,16 +335,28 @@ async def get_agencies(page: int = 1, limit: int = 10, current_user: str = Depen
         agences_collection = db["agencesFinale"]
         realstate_collection = db["realStateFinale"]
 
-        # Pipeline d'agrégation pour compter les annonces par agence et joindre avec agencesFinale
+        # Pipeline d'agrégation
         pipeline = [
-            # Étape 1 : Compter les annonces par idAgence dans realStateFinale
+            # Étape 1 : Compter les annonces par idAgence
             {
                 "$group": {
                     "_id": "$idAgence",
                     "annonces_count": {"$sum": 1}
                 }
             },
-            # Étape 2 : Joindre avec la collection agencesFinale
+            # Étape 2 : Convertir _id en ObjectId si nécessaire pour la jointure
+            {
+                "$addFields": {
+                    "_id": {
+                        "$cond": {
+                            "if": {"$isString": "$_id"},
+                            "then": {"$toObjectId": "$_id"},
+                            "else": "$_id"
+                        }
+                    }
+                }
+            },
+            # Étape 3 : Joindre avec agencesFinale
             {
                 "$lookup": {
                     "from": "agencesFinale",
@@ -353,26 +365,29 @@ async def get_agencies(page: int = 1, limit: int = 10, current_user: str = Depen
                     "as": "agency_info"
                 }
             },
-            # Étape 3 : Décomposer le tableau agency_info (car $lookup retourne un tableau)
+            # Étape 4 : Décomposer le tableau agency_info
             {
-                "$unwind": "$agency_info"
+                "$unwind": {
+                    "path": "$agency_info",
+                    "preserveNullAndEmptyArrays": True  # Garder les agences sans correspondance
+                }
             },
-            # Étape 4 : Projeter les champs nécessaires
+            # Étape 5 : Projeter les champs nécessaires
             {
                 "$project": {
                     "id": "$_id",
-                    "name": "$agency_info.name",
-                    "email": "$agency_info.email",
-                    "number": "$agency_info.number",
-                    "lien": "$agency_info.lien",
+                    "name": {"$ifNull": ["$agency_info.name", ""]},
+                    "email": {"$ifNull": ["$agency_info.email", ""]},
+                    "number": {"$ifNull": ["$agency_info.number", ""]},
+                    "lien": {"$ifNull": ["$agency_info.lien", ""]},
                     "annonces_count": 1
                 }
             },
-            # Étape 5 : Trier par nombre d'annonces (décroissant)
+            # Étape 6 : Trier par nombre d'annonces
             {
                 "$sort": {"annonces_count": -1}
             },
-            # Étape 6 : Appliquer la pagination
+            # Étape 7 : Appliquer la pagination
             {
                 "$skip": skip
             },
@@ -383,8 +398,9 @@ async def get_agencies(page: int = 1, limit: int = 10, current_user: str = Depen
 
         # Exécuter l'agrégation
         agencies = await realstate_collection.aggregate(pipeline).to_list(length=limit)
+        logger.debug(f"Agences récupérées pour page {page} : {len(agencies)} résultats")
 
-        # Compter le nombre total d'agences (uniquement celles avec des annonces)
+        # Compter le nombre total d'agences avec annonces
         total_agencies_pipeline = [
             {"$group": {"_id": "$idAgence"}},
             {"$count": "total"}
@@ -401,8 +417,7 @@ async def get_agencies(page: int = 1, limit: int = 10, current_user: str = Depen
                 "email": agency.get("email", ""),
                 "number": agency.get("number", ""),
                 "lien": agency.get("lien", ""),
-                # Optionnel : inclure le nombre d'annonces dans la réponse
-                "annonces_count": agency.get("annonces_count", 0)
+                "annonces_count": agency.get("annonces_count", 0)  # Optionnel
             }
             for agency in agencies
         ]
