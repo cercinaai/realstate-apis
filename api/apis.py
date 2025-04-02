@@ -344,14 +344,14 @@ async def get_agencies(page: int = 1, limit: int = 10, current_user: str = Depen
                     "annonces_count": {"$sum": 1}
                 }
             },
-            # Étape 2 : Convertir _id en ObjectId si nécessaire pour la jointure
+            # Étape 2 : Convertir _id en ObjectId si c'est une chaîne
             {
                 "$addFields": {
                     "_id": {
                         "$cond": {
-                            "if": {"$isString": "$_id"},
-                            "then": {"$toObjectId": "$_id"},
-                            "else": "$_id"
+                            "if": {"$eq": [{"$type": "$_id"}, "string"]},  # Vérifie si _id est une chaîne
+                            "then": {"$toObjectId": "$_id"},              # Convertit en ObjectId
+                            "else": "$_id"                                 # Garde tel quel sinon
                         }
                     }
                 }
