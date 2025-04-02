@@ -332,33 +332,94 @@ async def get_agencies(page: int = 1, limit: int = 10, current_user: str = Depen
     try:
         skip = (page - 1) * limit
         db = get_db()
-        collection = db["agencesFinale"]
-        total_agencies = await collection.count_documents({})
+        agences_collection = db["agencesFinale"]
+        realstate_collection = db["realStateFinale"]
+
+        # Pipeline d'agrégation pour compter les annonces par agence et joindre avec agencesFinale
+        pipeline = [
+            # Étape 1 : Compter les annonces par idAgence dans realStateFinale
+            {
+                "$group": {
+                    "_id": "$idAgence",
+                    "annonces_count": {"$sum": 1}
+                }
+            },
+            # Étape 2 : Joindre avec la collection agencesFinale
+            {
+                "$lookup": {
+                    "from": "agencesFinale",
+                    "localField": "_id",
+                    "foreignField": "_id",
+                    "as": "agency_info"
+                }
+            },
+            # Étape 3 : Décomposer le tableau agency_info (car $lookup retourne un tableau)
+            {
+                "$unwind": "$agency_info"
+            },
+            # Étape 4 : Projeter les champs nécessaires
+            {
+                "$project": {
+                    "id": "$_id",
+                    "name": "$agency_info.name",
+                    "email": "$agency_info.email",
+                    "number": "$agency_info.number",
+                    "lien": "$agency_info.lien",
+                    "annonces_count": 1
+                }
+            },
+            # Étape 5 : Trier par nombre d'annonces (décroissant)
+            {
+                "$sort": {"annonces_count": -1}
+            },
+            # Étape 6 : Appliquer la pagination
+            {
+                "$skip": skip
+            },
+            {
+                "$limit": limit
+            }
+        ]
+
+        # Exécuter l'agrégation
+        agencies = await realstate_collection.aggregate(pipeline).to_list(length=limit)
+
+        # Compter le nombre total d'agences (uniquement celles avec des annonces)
+        total_agencies_pipeline = [
+            {"$group": {"_id": "$idAgence"}},
+            {"$count": "total"}
+        ]
+        total_result = await realstate_collection.aggregate(total_agencies_pipeline).to_list(length=1)
+        total_agencies = total_result[0]["total"] if total_result else 0
         total_pages = math.ceil(total_agencies / limit)
 
-        agencies = await collection.find().skip(skip).limit(limit).to_list(length=limit)
+        # Formater la réponse
         response_agencies = [
             {
-                "id": str(agency["_id"]),
+                "id": str(agency["id"]),
                 "name": agency.get("name", ""),
                 "email": agency.get("email", ""),
                 "number": agency.get("number", ""),
-                "lien": agency.get("lien", "")
+                "lien": agency.get("lien", ""),
+                # Optionnel : inclure le nombre d'annonces dans la réponse
+                "annonces_count": agency.get("annonces_count", 0)
             }
             for agency in agencies
         ]
+
         response = {
             "agencies": response_agencies,
             "total_agencies": total_agencies,
             "total_pages": total_pages,
             "current_page": page
         }
-        logger.info(f"✅ Récupération de {len(response_agencies)} agences pour la page {page}")
+
+        logger.info(f"✅ Récupération de {len(response_agencies)} agences pour la page {page}, triées par nombre d'annonces")
         return response
+
     except Exception as e:
         logger.error(f"⚠️ Erreur lors de la récupération des agences : {e}")
         raise HTTPException(status_code=500, detail=f"Erreur serveur : {str(e)}")
-
 # Nouvelle API pour mettre à jour une agence dans agencesFinale
 @api_router.put("/agencies/{agency_id}", response_model=Dict)
 async def update_agency(agency_id: str, update: AgencyUpdate):
