@@ -12,7 +12,7 @@ from pydantic import BaseModel
 import bcrypt
 import jwt
 from datetime import datetime, timedelta
-from motor.motor_asyncio import AsyncIOMotorDatabase
+
 api_router = APIRouter()
 # Modèle pour la requête de login
 class LoginRequest(BaseModel):
@@ -332,49 +332,43 @@ async def get_agence_detail(agence_id: str):
 async def get_agencies(page: int = 1, limit: int = 10, current_user: str = Depends(get_current_user)):
     try:
         skip = (page - 1) * limit
-        db: AsyncIOMotorDatabase = get_db()
-        agencies_collection = db["agencesFinale"]
-        realstate_collection = db["realStateFinale"]
+        db = get_db()
+        agencies_collection = db["agencesFinale"]  # Changement : partir de agencesFinale
 
-        # Pipeline principal : partir de agencesFinale
+        # Pipeline principal
         pipeline = [
-            # Étape 1 : Commencer avec toutes les agences de agencesFinale
-            {"$match": {}},  # Pas de filtre, on prend tout
-
-            # Étape 2 : Jointure avec realStateFinale pour compter les annonces
+            # Étape 1 : Prendre toutes les agences de agencesFinale
+            {"$match": {}},  # Pas de filtre, on veut toutes les agences
+            
+            # Étape 2 : Compter les annonces associées dans realStateFinale
             {"$lookup": {
                 "from": "realStateFinale",
-                "localField": "_id",
-                "foreignField": "idAgence",
+                "let": {"agency_id": {"$toString": "$_id"}},  # Convertir _id en string
                 "pipeline": [
-                    {"$match": {"idAgence": {"$exists": True, "$ne": None}}},
-                    {"$group": {"_id": "$idAgence", "annonces_count": {"$sum": 1}}}
+                    {"$match": {
+                        "$expr": {"$eq": ["$idAgence", "$$agency_id"]}
+                    }},
+                    {"$count": "annonces_count"}
                 ],
-                "as": "realstate_info"
+                "as": "annonces_info"
             }},
-
-            # Étape 3 : Déplier realstate_info (optionnel, peut être vide)
-            {"$unwind": {
-                "path": "$realstate_info",
-                "preserveNullAndEmptyArrays": True
-            }},
-
-            # Étape 4 : Projeter les champs désirés
+            
+            # Étape 3 : Extraire le compte d'annonces (0 si aucun résultat)
             {"$project": {
-                "id": {"$toString": "$_id"},  # Convertir _id en string
+                "id": "$_id",
                 "name": {"$ifNull": ["$name", ""]},
                 "email": {"$ifNull": ["$email", ""]},
                 "number": {"$ifNull": ["$number", ""]},
                 "lien": {"$ifNull": ["$lien", ""]},
                 "annonces_count": {
-                    "$ifNull": ["$realstate_info.annonces_count", 0]  # 0 si pas d'annonces
+                    "$ifNull": [{"$arrayElemAt": ["$annonces_info.annonces_count", 0]}, 0]
                 }
             }},
-
-            # Étape 5 : Trier par annonces_count (décroissant)
+            
+            # Étape 4 : Trier par nombre d'annonces décroissant
             {"$sort": {"annonces_count": -1}},
-
-            # Étape 6 : Pagination
+            
+            # Étape 5 : Pagination
             {"$skip": skip},
             {"$limit": limit}
         ]
@@ -382,14 +376,18 @@ async def get_agencies(page: int = 1, limit: int = 10, current_user: str = Depen
         agencies = await agencies_collection.aggregate(pipeline).to_list(length=limit)
         logger.debug(f"Agences récupérées pour page {page} : {len(agencies)} résultats")
 
-        # Total des agences dans agencesFinale
-        total_agencies = await agencies_collection.count_documents({})
+        # Pipeline pour total_agencies (toutes les agences dans agencesFinale)
+        total_agencies_pipeline = [
+            {"$count": "total"}
+        ]
+        total_result = await agencies_collection.aggregate(total_agencies_pipeline).to_list(length=1)
+        total_agencies = total_result[0]["total"] if total_result else 0
         total_pages = math.ceil(total_agencies / limit)
 
         # Formater la réponse
         response_agencies = [
             {
-                "id": agency["id"],
+                "id": str(agency["id"]),
                 "name": agency.get("name", ""),
                 "email": agency.get("email", ""),
                 "number": agency.get("number", ""),
