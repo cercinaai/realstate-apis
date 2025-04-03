@@ -29,7 +29,8 @@ def fetch_emails(company_name, domain=None):
         payload["domain"] = domain
 
     try:
-        response = requests.post(API_URL, json=payload, headers=headers, timeout=180)
+        # Timeout augmenté à 300 secondes
+        response = requests.post(API_URL, json=payload, headers=headers, timeout=30000)
         status_code = response.status_code
         data = response.json() if response.content else {}
 
@@ -47,13 +48,13 @@ def fetch_emails(company_name, domain=None):
                 logging.info(log_msg)
                 return None
 
-        elif status_code == 400 or status_code == 401:
+        elif status_code in [400, 401]:
             logging.error(f"Requête invalide pour {company_name} (Domaine: {domain}): {data.get('error_explained', 'Erreur non précisée')}")
             return None
         elif status_code == 402:
             logging.error(f"Crédits insuffisants pour {company_name} (Domaine: {domain}): {data.get('error_explained', 'Erreur non précisée')}")
             return None
-        elif status_code == 404 or status_code == 451:
+        elif status_code in [404, 451]:
             logging.info(f"Emails non trouvés pour {company_name} (Domaine: {domain})")
             return None
         else:

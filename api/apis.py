@@ -10,9 +10,9 @@ from database import get_db  # Importer get_db
 import math
 from pydantic import BaseModel
 import bcrypt
-import jwt
+import jwt as pyjwt 
 from datetime import datetime, timedelta
-
+from mailFinder import update_agencies_with_emails
 api_router = APIRouter()
 
 # Modèle pour la requête de login
@@ -51,7 +51,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     else:
         expire = datetime.utcnow() + timedelta(minutes=150000)
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    encoded_jwt = pyjwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
 # Vérification du token
@@ -62,12 +62,12 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = pyjwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
         if username != DEFAULT_USER["username"]:
             raise credentials_exception
         return username
-    except jwt.PyJWTError:
+    except pyjwt.PyJWTError:
         raise credentials_exception
 
 # API de login
@@ -535,3 +535,18 @@ async def update_agency(agency_id: str, update: AgencyUpdate, current_user: str 
     except Exception as e:
         logger.error(f"⚠️ Erreur lors de la mise à jour de l'agence {agency_id} : {e}")
         raise HTTPException(status_code=500, detail=f"Erreur serveur : {str(e)}")
+    
+@api_router.get("/mailfinder/update-agencies", response_model=Dict)
+async def api_update_agencies_with_emails():
+    """
+    API publique pour mettre à jour les agences avec email via Mailfinder.
+    """
+    try:
+        result = await update_agencies_with_emails()
+        logger.info("✅ Mise à jour des emails via Mailfinder réussie")
+        return result
+    except Exception as e:
+        logger.error(f"⚠️ Erreur lors de la mise à jour des emails via Mailfinder : {e}")
+        raise HTTPException(status_code=500, detail="Erreur serveur")    
+    
+    
