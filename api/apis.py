@@ -418,37 +418,65 @@ async def get_agencies(page: int = 1, limit: int = 10, current_user: str = Depen
         db = get_db()
         agencies_collection = db["agencesFinale"]
 
-        # Pipeline pour récupérer les agences avec annonces, triées par nombre d'annonces
+        # Pipeline pour lister les agences et calculer leurs annonces
         pipeline = [
-            {"$lookup": {
-                "from": "realStateFinale",
-                "localField": "storeId",
-                "foreignField": "storeId",
-                "pipeline": [{"$project": {"_id": 1}}],  # Optimisation : ne charger que l'_id
-                "as": "annonces_info"
-            }},
-            {"$match": {"annonces_info": {"$ne": []}}},  # Ne garder que les agences avec annonces
+            # Étape 1 : Définir l'identifiant à utiliser (storeId ou idAgence)
             {"$project": {
-                "id": "$storeId",
+                "lookup_id": {
+                    "$cond": {
+                        "if": {"$and": [{"$ifNull": ["$storeId", False]}, {"$ne": ["$storeId", ""]}]},
+                        "then": "$storeId",
+                        "else": "$idAgence"
+                    }
+                },
                 "name": {"$ifNull": ["$name", ""]},
                 "email": {"$ifNull": ["$email", ""]},
                 "number": {"$ifNull": ["$number", ""]},
-                "lien": {"$ifNull": ["$lien", ""]},
+                "lien": {"$ifNull": ["$lien", ""]}
+            }},
+            # Étape 2 : Lookup avec l'identifiant choisi (storeId ou idAgence)
+            {"$lookup": {
+                "from": "realStateFinale",
+                "localField": "lookup_id",
+                "foreignField": "storeId",
+                "pipeline": [{"$project": {"_id": 1}}],  # Optimisation
+                "as": "annonces_info"
+            }},
+            # Étape 3 : Calculer le nombre d'annonces et filtrer
+            {"$project": {
+                "id": "$lookup_id",  # id sera storeId ou idAgence
+                "name": 1,
+                "email": 1,
+                "number": 1,
+                "lien": 1,
                 "annonces_count": {"$size": "$annonces_info"}
             }},
-            {"$sort": {"annonces_count": -1}},  # Tri par nombre d'annonces décroissant
+            # Étape 4 : Ne garder que les agences avec annonces
+            {"$match": {"annonces_count": {"$gt": 0}}},
+            # Étape 5 : Trier par nombre d'annonces décroissant
+            {"$sort": {"annonces_count": -1}},
+            # Étape 6 : Pagination
             {"$skip": skip},
             {"$limit": limit}
         ]
 
         agencies = await agencies_collection.aggregate(pipeline).to_list(length=limit)
-        logger.debug(f"Données brutes des agences : {agencies}")  # Log pour débogage
+        logger.debug(f"Données brutes des agences : {agencies}")
 
         # Calcul du total des agences avec annonces
         total_pipeline = [
+            {"$project": {
+                "lookup_id": {
+                    "$cond": {
+                        "if": {"$and": [{"$ifNull": ["$storeId", False]}, {"$ne": ["$storeId", ""]}]},
+                        "then": "$storeId",
+                        "else": "$idAgence"
+                    }
+                }
+            }},
             {"$lookup": {
                 "from": "realStateFinale",
-                "localField": "storeId",
+                "localField": "lookup_id",
                 "foreignField": "storeId",
                 "pipeline": [{"$project": {"_id": 1}}],
                 "as": "annonces_info"
@@ -460,10 +488,10 @@ async def get_agencies(page: int = 1, limit: int = 10, current_user: str = Depen
         total_agencies = total_result[0]["total"] if total_result else 0
         total_pages = math.ceil(total_agencies / limit)
 
-        # Formatage de la réponse selon la spécification exacte
+        # Formatage de la réponse
         response_agencies = [
             {
-                "id": agency.get("id", ""),  # Utiliser .get() pour éviter KeyError
+                "id": agency.get("id", ""),
                 "name": agency.get("name", ""),
                 "email": agency.get("email", ""),
                 "number": agency.get("number", ""),
