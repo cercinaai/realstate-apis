@@ -6,7 +6,7 @@ from typing import Optional, List, Dict
 from loguru import logger
 from models.annonce import AnnonceOutput
 from models.agenc import AgenceOutput
-from database import get_db
+from database import get_db  # Importer get_db
 import math
 from pydantic import BaseModel
 import bcrypt
@@ -91,7 +91,7 @@ async def login(request: LoginRequest):
 # Helper pour formater une annonce
 def format_annonce(annonce: Dict) -> Dict:
     return {
-        "id": annonce.get("idSec", ""),
+        "id": annonce.get("idSec", ""),  # id = idSec
         "Titre": annonce.get("title", ""),
         "Description": annonce.get("description", ""),
         "Prix": annonce.get("price", 0),
@@ -114,7 +114,7 @@ def format_annonce(annonce: Dict) -> Dict:
             "GES": annonce.get("ges", "")
         },
         "Agence": {
-            "id": annonce.get("storeId", ""),
+            "id": annonce.get("storeId", ""),  # id = storeId au lieu de idAgence
             "Nom": annonce.get("agenceName", "")
         },
         "location": {
@@ -130,7 +130,7 @@ def format_annonce(annonce: Dict) -> Dict:
 # Helper pour formater une agence
 def format_agence(agence: Dict) -> Dict:
     return {
-        "id": agence.get("storeId", ""),
+        "id": agence.get("storeId", ""),  # id = storeId
         "store_id": agence.get("storeId", ""),
         "name": agence.get("name", ""),
         "logo": agence.get("logo", None),
@@ -150,14 +150,34 @@ async def get_all_annonces(page: int = 1):
         skip = (page - 1) * per_page
         db = get_db()
         collection = db["realStateFinale"]
-        total_annonces = await collection.count_documents({})
-        total_pages = math.ceil(total_annonces / per_page)
 
-        annonces = await collection.find({}) \
-            .sort("scraped_at", -1) \
-            .skip(skip) \
-            .limit(per_page) \
-            .to_list(length=per_page)
+        # Filtrer uniquement les annonces avec un storeId existant dans agencesFinale
+        pipeline = [
+            {"$lookup": {
+                "from": "agencesFinale",
+                "localField": "storeId",
+                "foreignField": "storeId",
+                "as": "agence_info"
+            }},
+            {"$match": {"agence_info": {"$ne": []}}},  # Ne garder que les annonces avec agence
+            {"$sort": {"scraped_at": -1}},  # Tri par scraped_at
+            {"$skip": skip},
+            {"$limit": per_page}
+        ]
+
+        annonces = await collection.aggregate(pipeline).to_list(length=per_page)
+        total_annonces = await collection.aggregate([
+            {"$lookup": {
+                "from": "agencesFinale",
+                "localField": "storeId",
+                "foreignField": "storeId",
+                "as": "agence_info"
+            }},
+            {"$match": {"agence_info": {"$ne": []}}},
+            {"$count": "total"}
+        ]).to_list(length=1)
+        total_annonces = total_annonces[0]["total"] if total_annonces else 0
+        total_pages = math.ceil(total_annonces / per_page)
 
         formatted_annonces = [format_annonce(annonce) for annonce in annonces]
 
@@ -187,9 +207,9 @@ async def get_filtered_annonces(
     try:
         per_page = 8
         skip = (page - 1) * per_page
-        query = {}
         db = get_db()
         collection = db["realStateFinale"]
+        query = {}
 
         if location_type and location_type not in ["region", "departement", "city"]:
             raise HTTPException(status_code=400, detail="location_type doit être 'region', 'departement' ou 'city'")
@@ -210,14 +230,35 @@ async def get_filtered_annonces(
         if max_price:
             query["price"] = {"$lte": max_price}
 
-        total_annonces = await collection.count_documents(query)
-        total_pages = math.ceil(total_annonces / per_page)
+        # Pipeline pour filtrer les annonces avec agence et appliquer les filtres
+        pipeline = [
+            {"$match": query},
+            {"$lookup": {
+                "from": "agencesFinale",
+                "localField": "storeId",
+                "foreignField": "storeId",
+                "as": "agence_info"
+            }},
+            {"$match": {"agence_info": {"$ne": []}}},  # Ne garder que les annonces avec agence
+            {"$sort": {"scraped_at": -1}},  # Tri par scraped_at
+            {"$skip": skip},
+            {"$limit": per_page}
+        ]
 
-        annonces = await collection.find(query) \
-            .sort("scraped_at", -1) \
-            .skip(skip) \
-            .limit(per_page) \
-            .to_list(length=per_page)
+        annonces = await collection.aggregate(pipeline).to_list(length=per_page)
+        total_annonces = await collection.aggregate([
+            {"$match": query},
+            {"$lookup": {
+                "from": "agencesFinale",
+                "localField": "storeId",
+                "foreignField": "storeId",
+                "as": "agence_info"
+            }},
+            {"$match": {"agence_info": {"$ne": []}}},
+            {"$count": "total"}
+        ]).to_list(length=1)
+        total_annonces = total_annonces[0]["total"] if total_annonces else 0
+        total_pages = math.ceil(total_annonces / per_page)
 
         formatted_annonces = [format_annonce(annonce) for annonce in annonces]
 
@@ -243,6 +284,12 @@ async def get_annonce_detail(annonce_id: str):
         if not annonce:
             raise HTTPException(status_code=404, detail="Annonce non trouvée")
 
+        # Vérifier si l'annonce a une agence associée
+        agence_collection = db["agencesFinale"]
+        agence = await agence_collection.find_one({"storeId": annonce.get("storeId")})
+        if not agence:
+            raise HTTPException(status_code=404, detail="Annonce sans agence associée")
+
         formatted_annonce = format_annonce(annonce)
 
         lat, lon = annonce.get("latitude", 0.0), annonce.get("longitude", 0.0)
@@ -256,7 +303,18 @@ async def get_annonce_detail(annonce_id: str):
             "price": {"$gte": price - 200, "$lte": price + 200},
             "idSec": {"$ne": annonce_id}
         }
-        similar_annonces = await collection.find(similar_query).limit(5).to_list(length=5)
+        # Filtrer les similaires pour qu'elles aient une agence
+        similar_pipeline = [
+            {"$match": similar_query},
+            {"$lookup": {
+                "from": "agencesFinale",
+                "localField": "storeId",
+                "foreignField": "storeId",
+                "as": "agence_info"
+            }},
+            {"$match": {"agence_info": {"$ne": []}}}
+        ]
+        similar_annonces = await collection.aggregate(similar_pipeline).to_list(length=5)
         formatted_similar = [format_annonce(a) for a in similar_annonces]
 
         response = {
@@ -277,14 +335,34 @@ async def get_all_agences(page: int = 1):
         skip = (page - 1) * per_page
         db = get_db()
         collection = db["agencesFinale"]
-        total_agences = await collection.count_documents({})
-        total_pages = math.ceil(total_agences / per_page)
 
-        agences = await collection.find({}) \
-            .sort("_id", -1) \
-            .skip(skip) \
-            .limit(per_page) \
-            .to_list(length=per_page)
+        # Filtrer uniquement les agences avec des annonces
+        pipeline = [
+            {"$lookup": {
+                "from": "realStateFinale",
+                "localField": "storeId",
+                "foreignField": "storeId",
+                "as": "annonces_info"
+            }},
+            {"$match": {"annonces_info": {"$ne": []}}},  # Ne garder que les agences avec annonces
+            {"$sort": {"_id": -1}},  # Tri par défaut
+            {"$skip": skip},
+            {"$limit": per_page}
+        ]
+
+        agences = await collection.aggregate(pipeline).to_list(length=per_page)
+        total_agences = await collection.aggregate([
+            {"$lookup": {
+                "from": "realStateFinale",
+                "localField": "storeId",
+                "foreignField": "storeId",
+                "as": "annonces_info"
+            }},
+            {"$match": {"annonces_info": {"$ne": []}}},
+            {"$count": "total"}
+        ]).to_list(length=1)
+        total_agences = total_agences[0]["total"] if total_agences else 0
+        total_pages = math.ceil(total_agences / per_page)
 
         formatted_agences = [format_agence(agence) for agence in agences]
 
@@ -306,25 +384,17 @@ async def get_agence_detail(agence_id: str):
     try:
         db = get_db()
         collection = db["agencesFinale"]
-        # Recherche par storeId directement
         agence = await collection.find_one({"storeId": agence_id})
-        if not agence:
-            # Si pas trouvé par storeId, essayer par _id comme fallback
-            try:
-                agence = await collection.find_one({"_id": ObjectId(agence_id)})
-            except:
-                raise HTTPException(status_code=404, detail="Agence non trouvée")
-
         if not agence:
             raise HTTPException(status_code=404, detail="Agence non trouvée")
 
-        formatted_agence = format_agence(agence)
-
-        # Récupérer les annonces avec le même storeId
+        # Vérifier si l'agence a des annonces
         annonce_collection = db["realStateFinale"]
-        agence_store_id = agence.get("storeId", "")
-        logger.debug(f"Recherche des annonces pour storeId: {agence_store_id}")
-        agence_annonces = await annonce_collection.find({"storeId": agence_store_id}).to_list(length=None)
+        agence_annonces = await annonce_collection.find({"storeId": agence_id}).to_list(length=None)
+        if not agence_annonces:
+            raise HTTPException(status_code=404, detail="Agence sans annonces associées")
+
+        formatted_agence = format_agence(agence)
         formatted_annonces = [format_annonce(a) for a in agence_annonces]
 
         response = {
@@ -345,16 +415,15 @@ async def get_agencies(page: int = 1, limit: int = 10, current_user: str = Depen
         db = get_db()
         agencies_collection = db["agencesFinale"]
 
-        # Pipeline optimisé
+        # Pipeline pour ne retourner que les agences avec annonces, triées par nombre d'annonces
         pipeline = [
-            {"$match": {}},
             {"$lookup": {
                 "from": "realStateFinale",
                 "localField": "storeId",
                 "foreignField": "storeId",
-                "as": "annonces_info",
-                "pipeline": [{"$project": {"_id": 1}}]  # Réduire les données récupérées
+                "as": "annonces_info"
             }},
+            {"$match": {"annonces_info": {"$ne": []}}},  # Ne garder que les agences avec annonces
             {"$project": {
                 "id": "$storeId",
                 "name": {"$ifNull": ["$name", ""]},
@@ -363,17 +432,23 @@ async def get_agencies(page: int = 1, limit: int = 10, current_user: str = Depen
                 "lien": {"$ifNull": ["$lien", ""]},
                 "annonces_count": {"$size": "$annonces_info"}
             }},
-            {"$sort": {"annonces_count": -1}},
+            {"$sort": {"annonces_count": -1}},  # Tri par nombre d'annonces
             {"$skip": skip},
             {"$limit": limit}
         ]
 
         agencies = await agencies_collection.aggregate(pipeline).to_list(length=limit)
-        logger.debug(f"Agences récupérées pour page {page} : {len(agencies)} résultats")
-
-        total_agencies_pipeline = [{"$count": "total"}]
-        total_result = await agencies_collection.aggregate(total_agencies_pipeline).to_list(length=1)
-        total_agencies = total_result[0]["total"] if total_result else 0
+        total_agencies = await agencies_collection.aggregate([
+            {"$lookup": {
+                "from": "realStateFinale",
+                "localField": "storeId",
+                "foreignField": "storeId",
+                "as": "annonces_info"
+            }},
+            {"$match": {"annonces_info": {"$ne": []}}},
+            {"$count": "total"}
+        ]).to_list(length=1)
+        total_agencies = total_agencies[0]["total"] if total_agencies else 0
         total_pages = math.ceil(total_agencies / limit)
 
         response_agencies = [
@@ -394,7 +469,6 @@ async def get_agencies(page: int = 1, limit: int = 10, current_user: str = Depen
             "total_pages": total_pages,
             "current_page": page
         }
-
         logger.info(f"✅ Récupération de {len(response_agencies)} agences pour la page {page}, triées par nombre d'annonces")
         return response
     except Exception as e:
