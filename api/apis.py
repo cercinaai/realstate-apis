@@ -418,16 +418,16 @@ async def get_agencies(page: int = 1, limit: int = 10, current_user: str = Depen
         db = get_db()
         agencies_collection = db["agencesFinale"]
 
-        # Optimisation : limiter les champs dans $lookup
+        # Pipeline pour récupérer les agences avec annonces, triées par nombre d'annonces
         pipeline = [
             {"$lookup": {
                 "from": "realStateFinale",
                 "localField": "storeId",
                 "foreignField": "storeId",
-                "pipeline": [{"$project": {"_id": 1}}],  # Réduire la taille des données
+                "pipeline": [{"$project": {"_id": 1}}],  # Optimisation : ne charger que l'_id
                 "as": "annonces_info"
             }},
-            {"$match": {"annonces_info": {"$ne": []}}},
+            {"$match": {"annonces_info": {"$ne": []}}},  # Ne garder que les agences avec annonces
             {"$project": {
                 "id": "$storeId",
                 "name": {"$ifNull": ["$name", ""]},
@@ -436,12 +436,14 @@ async def get_agencies(page: int = 1, limit: int = 10, current_user: str = Depen
                 "lien": {"$ifNull": ["$lien", ""]},
                 "annonces_count": {"$size": "$annonces_info"}
             }},
-            {"$sort": {"annonces_count": -1}},
+            {"$sort": {"annonces_count": -1}},  # Tri par nombre d'annonces décroissant
             {"$skip": skip},
             {"$limit": limit}
         ]
 
         agencies = await agencies_collection.aggregate(pipeline).to_list(length=limit)
+
+        # Calcul du total des agences avec annonces
         total_pipeline = [
             {"$lookup": {
                 "from": "realStateFinale",
@@ -457,14 +459,15 @@ async def get_agencies(page: int = 1, limit: int = 10, current_user: str = Depen
         total_agencies = total_result[0]["total"] if total_result else 0
         total_pages = math.ceil(total_agencies / limit)
 
+        # Formatage de la réponse selon la spécification exacte
         response_agencies = [
             {
-                "id": agency.get("id", ""),
-                "name": agency.get("name", ""),
-                "email": agency.get("email", ""),
-                "number": agency.get("number", ""),
-                "lien": agency.get("lien", ""),
-                "annonces_count": agency.get("annonces_count", 0)
+                "id": agency["id"],  # storeId directement depuis le pipeline
+                "name": agency["name"],
+                "email": agency["email"],
+                "number": agency["number"],
+                "lien": agency["lien"],
+                "annonces_count": agency["annonces_count"]
             }
             for agency in agencies
         ]
