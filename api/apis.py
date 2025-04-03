@@ -91,7 +91,7 @@ async def login(request: LoginRequest):
 # Helper pour formater une annonce
 def format_annonce(annonce: Dict) -> Dict:
     return {
-        "id": annonce.get("idSec", ""),  # Changement : id = idSec
+        "id": annonce.get("idSec", ""),
         "Titre": annonce.get("title", ""),
         "Description": annonce.get("description", ""),
         "Prix": annonce.get("price", 0),
@@ -114,7 +114,7 @@ def format_annonce(annonce: Dict) -> Dict:
             "GES": annonce.get("ges", "")
         },
         "Agence": {
-            "id": annonce.get("storeId", ""),  # Changement : storeId au lieu de idAgence
+            "id": annonce.get("storeId", ""),
             "Nom": annonce.get("agenceName", "")
         },
         "location": {
@@ -130,7 +130,7 @@ def format_annonce(annonce: Dict) -> Dict:
 # Helper pour formater une agence
 def format_agence(agence: Dict) -> Dict:
     return {
-        "id": agence.get("storeId", ""),  # Changement : id = storeId
+        "id": agence.get("storeId", ""),
         "store_id": agence.get("storeId", ""),
         "name": agence.get("name", ""),
         "logo": agence.get("logo", None),
@@ -153,7 +153,11 @@ async def get_all_annonces(page: int = 1):
         total_annonces = await collection.count_documents({})
         total_pages = math.ceil(total_annonces / per_page)
 
-        annonces = await collection.find({}).sort("scraped_at", -1).skip(skip).limit(per_page).to_list(length=per_page)
+        annonces = await collection.find({}) \
+            .sort("scraped_at", -1) \
+            .skip(skip) \
+            .limit(per_page) \
+            .to_list(length=per_page)
 
         formatted_annonces = [format_annonce(annonce) for annonce in annonces]
 
@@ -209,7 +213,11 @@ async def get_filtered_annonces(
         total_annonces = await collection.count_documents(query)
         total_pages = math.ceil(total_annonces / per_page)
 
-        annonces = await collection.find({}).sort("scraped_at", -1).skip(skip).limit(per_page).to_list(length=per_page)
+        annonces = await collection.find(query) \
+            .sort("scraped_at", -1) \
+            .skip(skip) \
+            .limit(per_page) \
+            .to_list(length=per_page)
 
         formatted_annonces = [format_annonce(annonce) for annonce in annonces]
 
@@ -231,7 +239,7 @@ async def get_annonce_detail(annonce_id: str):
     try:
         db = get_db()
         collection = db["realStateFinale"]
-        annonce = await collection.find_one({"idSec": annonce_id})  # Changement : recherche par idSec
+        annonce = await collection.find_one({"idSec": annonce_id})
         if not annonce:
             raise HTTPException(status_code=404, detail="Annonce non trouvée")
 
@@ -247,7 +255,7 @@ async def get_annonce_detail(annonce_id: str):
             "latitude": {"$gte": lat - distance_km, "$lte": lat + distance_km},
             "longitude": {"$gte": lon - distance_km, "$lte": lon + distance_km},
             "price": {"$gte": price - 200, "$lte": price + 200},
-            "idSec": {"$ne": annonce_id}  # Changement : exclusion par idSec
+            "idSec": {"$ne": annonce_id}
         }
         similar_annonces = await collection.find(similar_query).limit(5).to_list(length=5)
         formatted_similar = [format_annonce(a) for a in similar_annonces]
@@ -299,7 +307,12 @@ async def get_agence_detail(agence_id: str):
     try:
         db = get_db()
         collection = db["agencesFinale"]
-        agence = await collection.find_one({"storeId": agence_id})  # Changement : recherche par storeId
+        # Correction : Vérifier si l'ID est un ObjectId valide, sinon utiliser storeId
+        try:
+            agence = await collection.find_one({"_id": ObjectId(agence_id)})
+        except:
+            agence = await collection.find_one({"storeId": agence_id})
+        
         if not agence:
             raise HTTPException(status_code=404, detail="Agence non trouvée")
 
@@ -307,7 +320,7 @@ async def get_agence_detail(agence_id: str):
 
         # Récupérer les annonces associées à cette agence via storeId
         annonce_collection = db["realStateFinale"]
-        agence_annonces = await annonce_collection.find({"storeId": agence_id}).to_list(length=None)
+        agence_annonces = await annonce_collection.find({"storeId": agence.get("storeId")}).to_list(length=None)
         formatted_annonces = [format_annonce(a) for a in agence_annonces]
 
         response = {
@@ -330,31 +343,22 @@ async def get_agencies(page: int = 1, limit: int = 10, current_user: str = Depen
 
         # Pipeline principal
         pipeline = [
-            # Étape 1 : Prendre toutes les agences
             {"$match": {}},
-            
-            # Étape 2 : Compter les annonces associées via storeId
             {"$lookup": {
                 "from": "realStateFinale",
                 "localField": "storeId",
                 "foreignField": "storeId",
                 "as": "annonces_info"
             }},
-            
-            # Étape 3 : Compter le nombre d'annonces
             {"$project": {
-                "id": "$storeId",  # Changement : id = storeId
+                "id": "$storeId",
                 "name": {"$ifNull": ["$name", ""]},
                 "email": {"$ifNull": ["$email", ""]},
                 "number": {"$ifNull": ["$number", ""]},
                 "lien": {"$ifNull": ["$lien", ""]},
                 "annonces_count": {"$size": "$annonces_info"}
             }},
-            
-            # Étape 4 : Trier par nombre d'annonces décroissant
             {"$sort": {"annonces_count": -1}},
-            
-            # Étape 5 : Pagination
             {"$skip": skip},
             {"$limit": limit}
         ]
@@ -362,13 +366,11 @@ async def get_agencies(page: int = 1, limit: int = 10, current_user: str = Depen
         agencies = await agencies_collection.aggregate(pipeline).to_list(length=limit)
         logger.debug(f"Agences récupérées pour page {page} : {len(agencies)} résultats")
 
-        # Pipeline pour total_agencies
         total_agencies_pipeline = [{"$count": "total"}]
         total_result = await agencies_collection.aggregate(total_agencies_pipeline).to_list(length=1)
         total_agencies = total_result[0]["total"] if total_result else 0
         total_pages = math.ceil(total_agencies / limit)
 
-        # Formater la réponse
         response_agencies = [
             {
                 "id": agency.get("id", ""),
@@ -405,7 +407,7 @@ async def update_agency(agency_id: str, update: AgencyUpdate):
         db = get_db()
         collection = db["agencesFinale"]
         result = await collection.update_one(
-            {"storeId": agency_id},  # Changement : recherche par storeId
+            {"storeId": agency_id},
             {"$set": update_data}
         )
         if result.matched_count == 0:
