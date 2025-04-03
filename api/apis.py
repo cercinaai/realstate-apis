@@ -336,32 +336,35 @@ async def get_all_agences(page: int = 1):
         db = get_db()
         collection = db["agencesFinale"]
 
-        # Filtrer uniquement les agences avec des annonces
+        # Optimisation : ne charger que les champs nécessaires dans $lookup
         pipeline = [
             {"$lookup": {
                 "from": "realStateFinale",
                 "localField": "storeId",
                 "foreignField": "storeId",
+                "pipeline": [{"$project": {"_id": 1}}],  # Limiter les données
                 "as": "annonces_info"
             }},
-            {"$match": {"annonces_info": {"$ne": []}}},  # Ne garder que les agences avec annonces
-            {"$sort": {"_id": -1}},  # Tri par défaut
+            {"$match": {"annonces_info": {"$ne": []}}},
+            {"$sort": {"_id": -1}},
             {"$skip": skip},
             {"$limit": per_page}
         ]
 
         agences = await collection.aggregate(pipeline).to_list(length=per_page)
-        total_agences = await collection.aggregate([
+        total_pipeline = [
             {"$lookup": {
                 "from": "realStateFinale",
                 "localField": "storeId",
                 "foreignField": "storeId",
+                "pipeline": [{"$project": {"_id": 1}}],
                 "as": "annonces_info"
             }},
             {"$match": {"annonces_info": {"$ne": []}}},
             {"$count": "total"}
-        ]).to_list(length=1)
-        total_agences = total_agences[0]["total"] if total_agences else 0
+        ]
+        total_result = await collection.aggregate(total_pipeline).to_list(length=1)
+        total_agences = total_result[0]["total"] if total_result else 0
         total_pages = math.ceil(total_agences / per_page)
 
         formatted_agences = [format_agence(agence) for agence in agences]
@@ -415,15 +418,16 @@ async def get_agencies(page: int = 1, limit: int = 10, current_user: str = Depen
         db = get_db()
         agencies_collection = db["agencesFinale"]
 
-        # Pipeline pour ne retourner que les agences avec annonces, triées par nombre d'annonces
+        # Optimisation : limiter les champs dans $lookup
         pipeline = [
             {"$lookup": {
                 "from": "realStateFinale",
                 "localField": "storeId",
                 "foreignField": "storeId",
+                "pipeline": [{"$project": {"_id": 1}}],  # Réduire la taille des données
                 "as": "annonces_info"
             }},
-            {"$match": {"annonces_info": {"$ne": []}}},  # Ne garder que les agences avec annonces
+            {"$match": {"annonces_info": {"$ne": []}}},
             {"$project": {
                 "id": "$storeId",
                 "name": {"$ifNull": ["$name", ""]},
@@ -432,23 +436,25 @@ async def get_agencies(page: int = 1, limit: int = 10, current_user: str = Depen
                 "lien": {"$ifNull": ["$lien", ""]},
                 "annonces_count": {"$size": "$annonces_info"}
             }},
-            {"$sort": {"annonces_count": -1}},  # Tri par nombre d'annonces
+            {"$sort": {"annonces_count": -1}},
             {"$skip": skip},
             {"$limit": limit}
         ]
 
         agencies = await agencies_collection.aggregate(pipeline).to_list(length=limit)
-        total_agencies = await agencies_collection.aggregate([
+        total_pipeline = [
             {"$lookup": {
                 "from": "realStateFinale",
                 "localField": "storeId",
                 "foreignField": "storeId",
+                "pipeline": [{"$project": {"_id": 1}}],
                 "as": "annonces_info"
             }},
             {"$match": {"annonces_info": {"$ne": []}}},
             {"$count": "total"}
-        ]).to_list(length=1)
-        total_agencies = total_agencies[0]["total"] if total_agencies else 0
+        ]
+        total_result = await agencies_collection.aggregate(total_pipeline).to_list(length=1)
+        total_agencies = total_result[0]["total"] if total_result else 0
         total_pages = math.ceil(total_agencies / limit)
 
         response_agencies = [
