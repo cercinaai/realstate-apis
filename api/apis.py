@@ -442,6 +442,7 @@ async def get_agencies(page: int = 1, limit: int = 10, current_user: str = Depen
         ]
 
         agencies = await agencies_collection.aggregate(pipeline).to_list(length=limit)
+        logger.debug(f"Données brutes des agences : {agencies}")  # Log pour débogage
 
         # Calcul du total des agences avec annonces
         total_pipeline = [
@@ -462,12 +463,12 @@ async def get_agencies(page: int = 1, limit: int = 10, current_user: str = Depen
         # Formatage de la réponse selon la spécification exacte
         response_agencies = [
             {
-                "id": agency["id"],  # storeId directement depuis le pipeline
-                "name": agency["name"],
-                "email": agency["email"],
-                "number": agency["number"],
-                "lien": agency["lien"],
-                "annonces_count": agency["annonces_count"]
+                "id": agency.get("id", ""),  # Utiliser .get() pour éviter KeyError
+                "name": agency.get("name", ""),
+                "email": agency.get("email", ""),
+                "number": agency.get("number", ""),
+                "lien": agency.get("lien", ""),
+                "annonces_count": agency.get("annonces_count", 0)
             }
             for agency in agencies
         ]
