@@ -6,7 +6,7 @@ from typing import Optional, List, Dict
 from loguru import logger
 from models.annonce import AnnonceOutput
 from models.agenc import AgenceOutput
-from database import get_db  # Importer get_db
+from database import get_db
 import math
 from pydantic import BaseModel
 import bcrypt
@@ -245,7 +245,6 @@ async def get_annonce_detail(annonce_id: str):
 
         formatted_annonce = format_annonce(annonce)
 
-        # Recherche d'annonces similaires (4 km, ±200€)
         lat, lon = annonce.get("latitude", 0.0), annonce.get("longitude", 0.0)
         price = annonce.get("price", 0)
         earth_radius_km = 6371
@@ -307,20 +306,25 @@ async def get_agence_detail(agence_id: str):
     try:
         db = get_db()
         collection = db["agencesFinale"]
-        # Correction : Vérifier si l'ID est un ObjectId valide, sinon utiliser storeId
-        try:
-            agence = await collection.find_one({"_id": ObjectId(agence_id)})
-        except:
-            agence = await collection.find_one({"storeId": agence_id})
-        
+        # Recherche par storeId directement
+        agence = await collection.find_one({"storeId": agence_id})
+        if not agence:
+            # Si pas trouvé par storeId, essayer par _id comme fallback
+            try:
+                agence = await collection.find_one({"_id": ObjectId(agence_id)})
+            except:
+                raise HTTPException(status_code=404, detail="Agence non trouvée")
+
         if not agence:
             raise HTTPException(status_code=404, detail="Agence non trouvée")
 
         formatted_agence = format_agence(agence)
 
-        # Récupérer les annonces associées à cette agence via storeId
+        # Récupérer les annonces avec le même storeId
         annonce_collection = db["realStateFinale"]
-        agence_annonces = await annonce_collection.find({"storeId": agence.get("storeId")}).to_list(length=None)
+        agence_store_id = agence.get("storeId", "")
+        logger.debug(f"Recherche des annonces pour storeId: {agence_store_id}")
+        agence_annonces = await annonce_collection.find({"storeId": agence_store_id}).to_list(length=None)
         formatted_annonces = [format_annonce(a) for a in agence_annonces]
 
         response = {
@@ -341,14 +345,15 @@ async def get_agencies(page: int = 1, limit: int = 10, current_user: str = Depen
         db = get_db()
         agencies_collection = db["agencesFinale"]
 
-        # Pipeline principal
+        # Pipeline optimisé
         pipeline = [
             {"$match": {}},
             {"$lookup": {
                 "from": "realStateFinale",
                 "localField": "storeId",
                 "foreignField": "storeId",
-                "as": "annonces_info"
+                "as": "annonces_info",
+                "pipeline": [{"$project": {"_id": 1}}]  # Réduire les données récupérées
             }},
             {"$project": {
                 "id": "$storeId",
@@ -398,7 +403,7 @@ async def get_agencies(page: int = 1, limit: int = 10, current_user: str = Depen
 
 # API pour mettre à jour une agence
 @api_router.put("/agencies/{agency_id}", response_model=Dict)
-async def update_agency(agency_id: str, update: AgencyUpdate):
+async def update_agency(agency_id: str, update: AgencyUpdate, current_user: str = Depends(get_current_user)):
     try:
         update_data = {k: v for k, v in update.dict().items() if v is not None}
         if not update_data:
