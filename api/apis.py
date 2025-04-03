@@ -516,7 +516,6 @@ async def get_agencies(page: int = 1, limit: int = 10, current_user: str = Depen
 # API pour mettre à jour une agence
 @api_router.put("/agencies/{agency_id}", response_model=Dict)
 async def update_agency(agency_id: str, update: AgencyUpdate, current_user: str = Depends(get_current_user)):
-    
     try:
         update_data = {k: v for k, v in update.dict().items() if v is not None}
         if not update_data:
@@ -537,9 +536,8 @@ async def update_agency(agency_id: str, update: AgencyUpdate, current_user: str 
         logger.error(f"⚠️ Erreur lors de la mise à jour de l'agence {agency_id} : {e}")
         raise HTTPException(status_code=500, detail=f"Erreur serveur : {str(e)}")
     
-    
 @api_router.post("/agencies/enrich-emails", response_model=Dict)
-async def enrich_agencies_emails(limit: int = 1000, current_user: str = Depends(get_current_user)):
+async def enrich_agencies_emails(limit: int = 1000):
     try:
         logger.info(f"Début de l'enrichissement des emails pour {limit} agences via API")
         result = await update_agencies_with_emails(limit=limit)
@@ -547,4 +545,4 @@ async def enrich_agencies_emails(limit: int = 1000, current_user: str = Depends(
         return result
     except Exception as e:
         logger.error(f"Erreur lors de l'enrichissement des emails via API : {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Erreur serveur : {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erreur serveur : {str(e)}")    
