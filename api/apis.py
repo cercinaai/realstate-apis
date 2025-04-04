@@ -419,67 +419,67 @@ async def get_agencies(page: int = 1, limit: int = 10, current_user: str = Depen
         db = get_db()
         agencies_collection = db["agencesFinale"]
 
-        # Pipeline pour lister les agences et calculer leurs annonces
+        # Étape 1 : Pré-filtrer les champs nécessaires
         pipeline = [
-            # Étape 1 : Définir l'identifiant à utiliser (storeId ou idAgence)
             {"$project": {
-                "lookup_id": {
-                    "$cond": {
-                        "if": {"$and": [{"$ifNull": ["$storeId", False]}, {"$ne": ["$storeId", ""]}]},
-                        "then": "$storeId",
-                        "else": "$idAgence"
-                    }
-                },
+                "storeId": 1,
+                "idAgence": 1,
                 "name": {"$ifNull": ["$name", ""]},
                 "email": {"$ifNull": ["$email", ""]},
                 "number": {"$ifNull": ["$number", ""]},
                 "lien": {"$ifNull": ["$lien", ""]}
             }},
-            # Étape 2 : Lookup avec l'identifiant choisi (storeId ou idAgence)
+            # Étape 2 : Lookup optimisé avec un index
             {"$lookup": {
                 "from": "realStateFinale",
-                "localField": "lookup_id",
-                "foreignField": "storeId",
-                "pipeline": [{"$project": {"_id": 1}}],  # Optimisation
+                "let": {"store_id": "$storeId", "id_agence": "$idAgence"},
+                "pipeline": [
+                    {"$match": {
+                        "$expr": {"$or": [
+                            {"$eq": ["$storeId", "$$store_id"]},
+                            {"$eq": ["$storeId", "$$id_agence"]}
+                        ]}
+                    }},
+                    {"$project": {"_id": 1}}
+                ],
                 "as": "annonces_info"
             }},
-            # Étape 3 : Calculer le nombre d'annonces et filtrer
+            # Étape 3 : Filtrer et compter
+            {"$match": {"annonces_info": {"$ne": []}}},
             {"$project": {
-                "id": "$lookup_id",  # id sera storeId ou idAgence
+                "id": {"$ifNull": ["$storeId", "$idAgence"]},
                 "name": 1,
                 "email": 1,
                 "number": 1,
                 "lien": 1,
                 "annonces_count": {"$size": "$annonces_info"}
             }},
-            # Étape 4 : Ne garder que les agences avec annonces
-            {"$match": {"annonces_count": {"$gt": 0}}},
-            # Étape 5 : Trier par nombre d'annonces décroissant
             {"$sort": {"annonces_count": -1}},
-            # Étape 6 : Pagination
             {"$skip": skip},
             {"$limit": limit}
         ]
 
+        # Exécuter l'agrégation
         agencies = await agencies_collection.aggregate(pipeline).to_list(length=limit)
-        logger.debug(f"Données brutes des agences : {agencies}")
 
-        # Calcul du total des agences avec annonces
+        # Calcul du total optimisé
         total_pipeline = [
             {"$project": {
-                "lookup_id": {
-                    "$cond": {
-                        "if": {"$and": [{"$ifNull": ["$storeId", False]}, {"$ne": ["$storeId", ""]}]},
-                        "then": "$storeId",
-                        "else": "$idAgence"
-                    }
-                }
+                "storeId": 1,
+                "idAgence": 1
             }},
             {"$lookup": {
                 "from": "realStateFinale",
-                "localField": "lookup_id",
-                "foreignField": "storeId",
-                "pipeline": [{"$project": {"_id": 1}}],
+                "let": {"store_id": "$storeId", "id_agence": "$idAgence"},
+                "pipeline": [
+                    {"$match": {
+                        "$expr": {"$or": [
+                            {"$eq": ["$storeId", "$$store_id"]},
+                            {"$eq": ["$storeId", "$$id_agence"]}
+                        ]}
+                    }},
+                    {"$project": {"_id": 1}}
+                ],
                 "as": "annonces_info"
             }},
             {"$match": {"annonces_info": {"$ne": []}}},
@@ -492,12 +492,12 @@ async def get_agencies(page: int = 1, limit: int = 10, current_user: str = Depen
         # Formatage de la réponse
         response_agencies = [
             {
-                "id": agency.get("id", ""),
-                "name": agency.get("name", ""),
-                "email": agency.get("email", ""),
-                "number": agency.get("number", ""),
-                "lien": agency.get("lien", ""),
-                "annonces_count": agency.get("annonces_count", 0)
+                "id": agency["id"],
+                "name": agency["name"],
+                "email": agency["email"],
+                "number": agency["number"],
+                "lien": agency["lien"],
+                "annonces_count": agency["annonces_count"]
             }
             for agency in agencies
         ]
@@ -508,12 +508,12 @@ async def get_agencies(page: int = 1, limit: int = 10, current_user: str = Depen
             "total_pages": total_pages,
             "current_page": page
         }
-        logger.info(f"✅ Récupération de {len(response_agencies)} agences pour la page {page}, triées par nombre d'annonces")
+        logger.info(f"✅ Récupération de {len(response_agencies)} agences pour la page {page}")
         return response
     except Exception as e:
         logger.error(f"⚠️ Erreur lors de la récupération des agences : {e}")
         raise HTTPException(status_code=500, detail=f"Erreur serveur : {str(e)}")
-
+    
 # API pour mettre à jour une agence
 @api_router.put("/agencies/{agency_id}", response_model=Dict)
 async def update_agency(agency_id: str, update: AgencyUpdate, current_user: str = Depends(get_current_user)):

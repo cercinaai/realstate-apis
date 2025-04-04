@@ -78,7 +78,6 @@ export class AgencesComponent implements OnInit {
   get paginationPages(): number[] {
     const pages: number[] = [];
     const blockSize = 10;
-    const totalBlocks = Math.ceil(this.totalPages / blockSize);
     const currentBlock = Math.floor((this.page - 1) / blockSize);
     const startPage = currentBlock * blockSize + 1;
     const endPage = Math.min(startPage + blockSize - 1, this.totalPages);
@@ -91,16 +90,7 @@ export class AgencesComponent implements OnInit {
 
   changePage(newPage: number) {
     if (newPage >= 1 && newPage <= this.totalPages) {
-      const blockSize = 10;
-      const currentBlock = Math.floor((this.page - 1) / blockSize);
-      const newBlock = Math.floor((newPage - 1) / blockSize);
-
-      // Si on change de bloc, ajuster la page pour afficher le nouveau bloc
-      if (currentBlock !== newBlock) {
-        this.page = newPage;
-      } else {
-        this.page = newPage;
-      }
+      this.page = newPage;
       this.loadAgences();
     }
   }
@@ -109,7 +99,7 @@ export class AgencesComponent implements OnInit {
     const blockSize = 10;
     const currentBlock = Math.floor((this.page - 1) / blockSize);
     if (currentBlock > 0) {
-      this.page = (currentBlock - 1) * blockSize + 1;
+      this.page = Math.max(1, (currentBlock - 1) * blockSize + 1);
       this.loadAgences();
     }
   }
@@ -120,6 +110,7 @@ export class AgencesComponent implements OnInit {
     const totalBlocks = Math.ceil(this.totalPages / blockSize);
     if (currentBlock < totalBlocks - 1) {
       this.page = (currentBlock + 1) * blockSize + 1;
+      if (this.page > this.totalPages) this.page = this.totalPages;
       this.loadAgences();
     }
   }
