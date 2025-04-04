@@ -5,10 +5,9 @@
     background: linear-gradient(145deg, #f9f9f9, #f0f2f5);
     border-radius: 20px;
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-    position: relative; /* Pour le positionnement du spinner */
+    position: relative;
   }
   
-  /* Style amélioré de la table */
   .agences-table {
     width: 100%;
     border-collapse: separate;
@@ -44,7 +43,6 @@
     transition: background 0.3s ease;
   }
   
-  /* Style des inputs */
   input {
     padding: 12px;
     border: 1px solid #e0e6ed;
@@ -61,7 +59,6 @@
     outline: none;
   }
   
-  /* Boutons */
   button {
     padding: 10px 18px;
     border: none;
@@ -91,7 +88,6 @@
     transform: translateY(-2px);
   }
   
-  /* Lien cliquable */
   .lien-clickable {
     color: #2a5298;
     text-decoration: none;
@@ -106,7 +102,6 @@
     text-decoration: underline;
   }
   
-  /* Pagination améliorée */
   .pagination {
     display: flex;
     justify-content: center;
@@ -152,7 +147,6 @@
     font-weight: 500;
   }
   
-  /* Spinner de chargement */
   .loading-overlay {
     position: absolute;
     top: 0;
@@ -180,7 +174,6 @@
     100% { transform: rotate(360deg); }
   }
   
-  /* Autres styles inchangés */
   .page-title {
     text-align: center;
     font-size: 2.4rem;
