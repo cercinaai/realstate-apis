@@ -139,7 +139,8 @@ def format_agence(agence: Dict) -> Dict:
         "opening_hours": agence.get("horaires", None),
         "phone_number": agence.get("number", None),
         "description": agence.get("description", None),
-        "email": agence.get("email", None)
+        "email": agence.get("email", None),
+        "adresse": agence.get("adresse", None),
     }
 
 # API pour toutes les annonces avec pagination
