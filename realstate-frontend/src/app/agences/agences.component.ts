@@ -2,7 +2,6 @@ import { Component, OnInit } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
 import { Router } from '@angular/router';
 import { AgenceService } from '../agence.service';
-import { AgencyUpdateDialogComponent } from './agency-update-dialog/agency-update-dialog.component';
 
 @Component({
   selector: 'app-agences',
@@ -17,6 +16,7 @@ export class AgencesComponent implements OnInit {
   totalAgences = 0;
   totalPages = 0;
   limitOptions = [10, 20, 50];
+  isLoading = false;
 
   constructor(
     private agenceService: AgenceService,
@@ -29,6 +29,7 @@ export class AgencesComponent implements OnInit {
   }
 
   loadAgences() {
+    this.isLoading = true;
     this.agenceService.getAgences(this.page, this.limit).subscribe({
       next: (data) => {
         if (data && data.agencies) {
@@ -44,12 +45,14 @@ export class AgencesComponent implements OnInit {
           this.totalAgences = 0;
           this.totalPages = 0;
         }
+        this.isLoading = false;
       },
       error: (err) => {
         console.error('Erreur lors du chargement des agences:', err);
         this.agences = [];
         this.totalAgences = 0;
         this.totalPages = 0;
+        this.isLoading = false;
       }
     });
   }
@@ -59,22 +62,24 @@ export class AgencesComponent implements OnInit {
   }
 
   saveAgence(agence: any) {
+    this.isLoading = true;
     const update = { email: agence.emails.join(','), number: agence.number };
-    this.agenceService.updateAgence(agence.id, update).subscribe(() => {
-      alert('Agence mise à jour');
-      this.loadAgences();
+    this.agenceService.updateAgence(agence.id, update).subscribe({
+      next: () => {
+        alert('Agence mise à jour');
+        this.loadAgences();
+      },
+      error: () => {
+        this.isLoading = false;
+      }
     });
-  }
-
-  openDetails(agence: any) {
-    this.dialog.open(AgencyUpdateDialogComponent, { data: agence });
   }
 
   get paginationPages(): number[] {
     const pages: number[] = [];
     const blockSize = 10;
     const currentBlock = Math.floor((this.page - 1) / blockSize);
-    const startPage = currentBlock * blockSize + 1;
+    const startPage = currentBlock * blockSize + 1; // Correction appliquée
     const endPage = Math.min(startPage + blockSize - 1, this.totalPages);
 
     for (let i = startPage; i <= endPage; i++) {
@@ -102,6 +107,6 @@ export class AgencesComponent implements OnInit {
   }
 
   trackByIndex(index: number, item: any): number {
-    return index; // Retourne l'index comme identifiant unique
+    return index;
   }
 }
