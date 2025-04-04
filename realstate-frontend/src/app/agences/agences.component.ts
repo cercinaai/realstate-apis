@@ -70,6 +70,19 @@ export class AgencesComponent implements OnInit {
     this.dialog.open(AgencyUpdateDialogComponent, { data: agence });
   }
 
+  get paginationPages(): number[] {
+    const pages: number[] = [];
+    const blockSize = 10;
+    const currentBlock = Math.floor((this.page - 1) / blockSize);
+    const startPage = currentBlock * blockSize + 1;
+    const endPage = Math.min(startPage + blockSize - 1, this.totalPages);
+
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+    return pages;
+  }
+
   changePage(newPage: number) {
     if (newPage >= 1 && newPage <= this.totalPages) {
       this.page = newPage;

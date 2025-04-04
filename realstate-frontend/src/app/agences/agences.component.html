@@ -51,7 +51,15 @@
 
   <div class="pagination">
     <button [disabled]="page === 1" (click)="changePage(page - 1)">Précédent</button>
-    <span>Page {{ page }} sur {{ totalPages }}</span>
+    
+    <!-- Boutons des numéros de page -->
+    <button *ngFor="let p of paginationPages" 
+            [class.active]="p === page" 
+            (click)="changePage(p)">
+      {{ p }}
+    </button>
+    
     <button [disabled]="page === totalPages" (click)="changePage(page + 1)">Suivant</button>
+    <span>Total: {{ totalPages }} pages</span>
   </div>
 </div>
